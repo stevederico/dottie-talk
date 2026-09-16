@@ -1,0 +1,31 @@
+{
+  "name": "dottie-talk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local parakeet STT + koko TTS via MCP and HTTP. Standalone — no gateway hop.",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "exports": {
+    ".": "./core.js",
+    "./core.js": "./core.js",
+    "./http.js": "./http.js",
+    "./mcp.js": "./mcp.js",
+    "./ports.js": "./ports.js"
+  },
+  "bin": {
+    "dottie-talk": "./mcp.js"
+  },
+  "scripts": {
+    "mcp": "node mcp.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.4"
+  }
+}
