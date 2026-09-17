@@ -1,8 +1,6 @@
 #!/bin/bash
 # install_bins.sh — stage parakeet-server + koko (+ espeak-ng-data) into package bin/.
 #
-# Simplest standalone setup for dottie-talk. Does not vendor binaries in git.
-#
 # Usage:
 #   ./scripts/install_bins.sh              # → ../bin
 #   ./scripts/install_bins.sh /path/to/bin  # explicit
@@ -20,13 +18,6 @@ PKG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 OUT="${1:-${BUNDLE_OUT:-$PKG_ROOT/bin}}"
 CACHE_DIR="${HOME}/.dottie-build-cache"
 KOKOROS_REF="${KOKOROS_REF:-main}"
-DESKTOP_BIN=""
-if [ -d "$PKG_ROOT/../../../bin" ]; then
-  DESKTOP_BIN="$(cd "$PKG_ROOT/../../../bin" && pwd)"
-elif [ -d "$HOME/Projects/dottie-desktop/bin" ]; then
-  DESKTOP_BIN="$HOME/Projects/dottie-desktop/bin"
-fi
-DOTTIE_APP_BIN="/Applications/Dottie.app/Contents/Resources/bin"
 
 log() { printf '[talk-bins] %s\n' "$*" >&2; }
 die() { printf '[talk-bins] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -37,15 +28,6 @@ mkdir -p "$OUT"
 if [ -z "${SKIP_PARAKEET:-}" ]; then
   if [ -x "$OUT/parakeet-server" ] && [ -z "${FORCE_REBUILD:-}" ]; then
     log "parakeet-server already at $OUT"
-  elif [ -n "$DESKTOP_BIN" ] && [ -x "$DESKTOP_BIN/parakeet-server" ] && [ -z "${FORCE_REBUILD:-}" ]; then
-    cp -a "$DESKTOP_BIN/parakeet-server" "$OUT/parakeet-server"
-    chmod +x "$OUT/parakeet-server"
-    [ -f "$DESKTOP_BIN/.parakeet-version" ] && cp -a "$DESKTOP_BIN/.parakeet-version" "$OUT/" || true
-    log "parakeet-server copied from $DESKTOP_BIN"
-  elif [ -x "$DOTTIE_APP_BIN/parakeet-server" ] && [ -z "${FORCE_REBUILD:-}" ]; then
-    cp -a "$DOTTIE_APP_BIN/parakeet-server" "$OUT/parakeet-server"
-    chmod +x "$OUT/parakeet-server"
-    log "parakeet-server copied from $DOTTIE_APP_BIN"
   else
     log "installing parakeet-server → $OUT (cmake build)"
     BUNDLE_OUT="$OUT" bash "$SCRIPT_DIR/install_parakeet_bundle.sh" "$OUT"
@@ -55,7 +37,6 @@ fi
 # ---- koko -------------------------------------------------------------------
 install_koko_from_copy() {
   local src="$1"
-  [ -n "$src" ] || return 1
   [ -x "$src" ] || return 1
   cp -a "$src" "$OUT/koko"
   chmod +x "$OUT/koko"
@@ -67,19 +48,15 @@ install_koko_espeak() {
   local src_dir=""
   for d in \
     "$OUT/espeak-ng-data" \
-    ${DESKTOP_BIN:+"$DESKTOP_BIN/espeak-ng-data"} \
-    "$DOTTIE_APP_BIN/espeak-ng-data" \
-    ${DOTTIE_BIN_DIR:+"$DOTTIE_BIN_DIR/espeak-ng-data"} \
     "/opt/homebrew/share/espeak-ng-data" \
     "/usr/local/share/espeak-ng-data"; do
-    [ -n "$d" ] || continue
     if [ -f "$d/phontab" ]; then
       src_dir="$d"
       break
     fi
   done
   if [ -z "$src_dir" ]; then
-    log "WARN: espeak-ng-data not found — brew install espeak-ng, or copy espeak-ng-data into $OUT"
+    log "WARN: espeak-ng-data not found — brew install espeak-ng, or keep espeak-ng-data in $OUT"
     return 0
   fi
   if [ "$src_dir" = "$OUT/espeak-ng-data" ]; then
@@ -118,10 +95,7 @@ if [ -z "${SKIP_KOKO:-}" ]; then
   if [ -x "$OUT/koko" ] && [ -z "${FORCE_REBUILD:-}" ]; then
     log "koko already at $OUT"
   else
-    if { [ -n "$DESKTOP_BIN" ] && install_koko_from_copy "$DESKTOP_BIN/koko"; } \
-      || install_koko_from_copy "$DOTTIE_APP_BIN/koko" \
-      || { [ -n "${DOTTIE_BIN_DIR:-}" ] && install_koko_from_copy "$DOTTIE_BIN_DIR/koko"; } \
-      || install_koko_from_copy /usr/local/bin/koko \
+    if install_koko_from_copy /usr/local/bin/koko \
       || install_koko_from_copy /opt/homebrew/bin/koko \
       || install_koko_cargo; then
       :

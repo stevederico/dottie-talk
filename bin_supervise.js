@@ -24,18 +24,10 @@ const DATA_DIR = process.env.DOTTIE_TALK_DATA
     : path.join(HOME, '.cache', 'dottie-talk'));
 const DOTTIE_DIR = DATA_DIR;
 
-/** Prefer package-local bin/, then DOTTIE_BIN_DIR, then desktop submodule bin/. */
+/** Prefer package-local bin/, then DOTTIE_BIN_DIR. */
 function resolveBinDir() {
   if (process.env.DOTTIE_BIN_DIR) return process.env.DOTTIE_BIN_DIR;
-  const local = path.join(__dirname, 'bin');
-  if (existsSync(path.join(local, 'parakeet-server')) || existsSync(path.join(local, 'koko'))) {
-    return local;
-  }
-  const desktop = path.resolve(__dirname, '..', '..', '..', 'bin');
-  if (existsSync(path.join(desktop, 'parakeet-server')) || existsSync(path.join(desktop, 'koko'))) {
-    return desktop;
-  }
-  return local;
+  return path.join(__dirname, 'bin');
 }
 
 function binDir() {
