@@ -265,11 +265,25 @@ async function spawnStt() {
   throw new Error('STT failed to become healthy');
 }
 
+function resolveKokoBin() {
+  const dir = binDir();
+  if (existsSync(path.join(dir, 'koko'))) return path.join(dir, 'koko');
+  for (const p of ['/usr/local/bin/koko', '/opt/homebrew/bin/koko']) {
+    if (existsSync(p)) return p;
+  }
+  // Last resort: install script (may also fetch parakeet).
+  try {
+    const installed = ensurePackageBinsInstalled();
+    const bin = path.join(installed, 'koko');
+    if (existsSync(bin)) return bin;
+  } catch { /* fall through */ }
+  return null;
+}
+
 async function spawnTts() {
   if (await healthOk(`http://127.0.0.1:${PORTS.TTS_PORT}/`)) return true;
-  const dir = ensurePackageBinsInstalled();
-  const bin = [path.join(dir, 'koko'), '/usr/local/bin/koko'].find((p) => existsSync(p));
-  if (!bin) throw new Error(`koko not found in ${dir} — run: npm run install:bins`);
+  const bin = resolveKokoBin();
+  if (!bin) throw new Error(`koko not found — run: npm run install:bins`);
   const kokoDataDir = await ensureKokoModels();
   const espeakDataDir = findEspeakData();
   ensureKokoEspeakSymlinks(bin, espeakDataDir);
@@ -290,6 +304,11 @@ async function spawnTts() {
     await new Promise((r) => setTimeout(r, 300));
   }
   throw new Error('TTS failed to become healthy');
+}
+
+/** Start koko TTS only (:1314). Idempotent. Does not require parakeet. */
+export async function ensureTtsRunning() {
+  return spawnTts();
 }
 
 /** Start STT+TTS if down. Idempotent. */
