@@ -1,6 +1,6 @@
 # dottie-talk
 
-Local voice: parakeet STT (`:1315`) + koko TTS (`:1314`) + HTTP façade (`:1320`).
+Local voice: STT + koko TTS (`:1314`) + HTTP façade (`:1320`).
 
 Standalone. No gateway. No Dottie.app.
 
@@ -9,7 +9,12 @@ npm install
 npm start
 ```
 
-Bins ship in `bin/`. Models download on first boot (`~/.cache/parakeet.cpp`, `~/.cache/dottie-talk` or `~/.dottie`).
+Bins ship in `bin/` (macOS). Models download on first boot (`~/.cache/parakeet.cpp`, `~/.cache/dottie-talk` or `~/.dottie`).
+
+| Platform | STT | TTS |
+|---|---|---|
+| Apple Silicon (darwin) | `parakeet-server` `:1315` (bundled) | `koko` `:1314` |
+| Omarchy / Linux | system `voxtype` CLI | `koko` `:1314` (build via `npm run install:bins`) |
 
 | Command | What |
 |---|---|
@@ -17,4 +22,6 @@ Bins ship in `bin/`. Models download on first boot (`~/.cache/parakeet.cpp`, `~/
 | `npm run mcp` | MCP stdio |
 | `npm run tts` | TTS only (`:1314`) |
 
-Apple Silicon + Node ≥22.
+Node ≥22. Override STT with `DOTTIE_STT=voxtype` or `DOTTIE_STT=parakeet`.
+
+Linux: install Voxtype first (Omarchy: Install → AI → Dictation, or `voxtype-bin`). Streaming/multipart STT needs parakeet — buffered JSON `/v1/audio/transcriptions` works on both.

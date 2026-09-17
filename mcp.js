@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dottie-talk MCP stdio — transcribe / speak → local parakeet + koko.
+ * dottie-talk MCP stdio — transcribe / speak → local STT (parakeet or voxtype) + koko.
  * No gateway :1317 hop.
  *
  *   node mcp.js
@@ -16,7 +16,7 @@ import { ensureBinsRunning } from './bin_supervise.js';
 export const TALK_TOOLS = [
   {
     name: 'transcribe',
-    description: 'Transcribe WAV audio (base64) via local parakeet STT.',
+    description: 'Transcribe WAV audio (base64) via local STT (parakeet or voxtype).',
     inputSchema: {
       type: 'object',
       properties: {
