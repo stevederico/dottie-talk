@@ -19,6 +19,15 @@ npm test
 npm run mcp
 ```
 
+### Rebuild `parakeet-server` (optional)
+
+Streaming `/v1/stream/*` lives in `patches/parakeet/`. Build + stage:
+
+```bash
+./scripts/install_parakeet_bundle.sh                 # → dottie-desktop/bin when submodule
+./scripts/install_parakeet_bundle.sh /path/to/bin     # explicit
+```
+
 ## Runtime contract
 
 - parakeet on `:1315`, koko on `:1314` (usually supervised by Dottie.app / gateway)

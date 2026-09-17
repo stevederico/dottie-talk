@@ -1,0 +1,390 @@
+diff --git a/examples/server/main.cpp b/examples/server/main.cpp
+index 9ac4b14..39a351e 100644
+--- a/examples/server/main.cpp
++++ b/examples/server/main.cpp
+@@ -6,12 +6,18 @@
+ #include "transcription.hpp"  // pk::Transcription
+ #include "ggml_graph.hpp"     // pk::set_num_threads, pk::shutdown_backend
+ #include "dr_wav.h"           // declarations only; impl lives in libparakeet
++#include "parakeet_capi.h"    // streaming C-API (second context for --stream-model)
+ 
++#include <atomic>
++#include <chrono>
+ #include <csignal>
++#include <cstdint>
+ #include <cstdio>
+ #include <memory>
+ #include <mutex>
++#include <random>
+ #include <string>
++#include <unordered_map>
+ #include <vector>
+ 
+ namespace {
+@@ -47,16 +53,42 @@ bool decode_wav_mem(const std::string& bytes, std::vector<float>& mono,
+ void usage() {
+     std::fprintf(stderr,
+         "usage:\n"
+-        "  parakeet-server --model <path|url|alias> [--host 127.0.0.1] "
+-        "[--port 8080] [--threads N] [--cache-dir <dir>]\n"
++        "  parakeet-server --model <path|url|alias> [--stream-model <path|url|alias>] "
++        "[--host 127.0.0.1] [--port 8080] [--threads N] [--cache-dir <dir>]\n"
+         "\n"
+-        "Serves POST /v1/audio/transcriptions (OpenAI-compatible) for one model.\n");
++        "Serves POST /v1/audio/transcriptions (OpenAI-compatible) for one model.\n"
++        "With --stream-model (a cache-aware streaming model, e.g. alias 'eou-120m'),\n"
++        "also serves the incremental streaming API:\n"
++        "  POST   /v1/stream/sessions                 -> {\"id\":\"<hex>\"}\n"
++        "  POST   /v1/stream/sessions/<id>/audio      raw LE int16 mono 16 kHz PCM body\n"
++        "                                             -> {\"text\":\"<delta>\",\"eou\":bool}\n"
++        "  POST   /v1/stream/sessions/<id>/finalize   -> {\"text\":\"<tail>\"} and frees it\n"
++        "  DELETE /v1/stream/sessions/<id>            -> {}\n");
+ }
+ 
++// ---- streaming session registry --------------------------------------------
++// One entry per live /v1/stream session. Feeds on one session serialize on the
++// per-session mutex; different sessions need no app-level lock — the library
++// serializes computes on its internal backend mutex. The registry mutex only
++// guards the map. Sessions are held by shared_ptr so a reap/finalize/delete
++// can erase the map entry while a feed is in flight: the feed's shared_ptr
++// keeps the Sess alive until its handler returns.
++struct StreamSess {
++    parakeet_stream* stream = nullptr;  // nulled once freed
++    std::mutex mu;                      // serializes feed/finalize/free on this session
++    std::chrono::steady_clock::time_point last_used;
++    size_t total_samples = 0;
++};
++
++constexpr size_t kMaxStreamSessions  = 8;
++constexpr size_t kMaxSessionSamples  = 16000u * 600u;  // 10 minutes @ 16 kHz
++constexpr size_t kMaxFeedSamples     = 16000u * 30u;   // 30 s cap per /audio feed
++constexpr int    kSessionIdleReapSec = 120;
++
+ } // namespace
+ 
+ int main(int argc, char** argv) {
+-    std::string model_arg, host = "127.0.0.1", cache_dir;
++    std::string model_arg, stream_model_arg, host = "127.0.0.1", cache_dir;
+     int port = 8080, threads = 0;
+ 
+     for (int i = 1; i < argc; ++i) {
+@@ -66,6 +98,7 @@ int main(int argc, char** argv) {
+             return argv[++i];
+         };
+         if (a == "--model")        model_arg = next("--model");
++        else if (a == "--stream-model") stream_model_arg = next("--stream-model");
+         else if (a == "--host")    host = next("--host");
+         else if (a == "--port")    port = std::atoi(next("--port").c_str());
+         else if (a == "--threads") threads = std::atoi(next("--threads").c_str());
+@@ -93,6 +126,24 @@ int main(int argc, char** argv) {
+         return 1;
+     }
+ 
++    // Resolve and fetch the optional streaming model the same way.
++    std::string stream_model_path;
++    if (!stream_model_arg.empty()) {
++        pkserver::ModelSource ssrc;
++        if (!pkserver::resolve_model(stream_model_arg, ssrc, err)) {
++            std::fprintf(stderr, "parakeet-server: %s\n", err.c_str());
++            return 2;
++        }
++        try {
++            if (ssrc.kind == pkserver::ModelSource::kUrl)
++                std::fprintf(stderr, "parakeet-server: fetching %s\n", ssrc.value.c_str());
++            stream_model_path = pkserver::fetch_model(ssrc, cache_dir);
++        } catch (const std::exception& e) {
++            std::fprintf(stderr, "parakeet-server: %s\n", e.what());
++            return 1;
++        }
++    }
++
+     if (threads > 0) pk::set_num_threads(threads);
+ 
+     std::unique_ptr<pk::Model> model = pk::Model::load(model_path);
+@@ -103,11 +154,99 @@ int main(int argc, char** argv) {
+     }
+     std::mutex infer_mu;
+ 
++    // Second context via the C API for the cache-aware streaming model. The
++    // PCM-buffering / incremental-mel session logic lives behind the C API in
++    // libparakeet, so streaming goes through parakeet_capi_* rather than the
++    // C++ classes.
++    parakeet_ctx* stream_ctx = nullptr;
++    if (!stream_model_path.empty()) {
++        stream_ctx = parakeet_capi_load(stream_model_path.c_str());
++        if (!stream_ctx) {
++            std::fprintf(stderr, "parakeet-server: failed to load stream model %s\n",
++                         stream_model_path.c_str());
++            pk::shutdown_backend();
++            return 1;
++        }
++    }
++
++    std::unordered_map<std::string, std::shared_ptr<StreamSess>> sessions;
++    std::mutex sessions_mu;                       // guards `sessions` and `session_rng`
++    std::atomic<uint64_t> session_counter{0};
++    std::mt19937_64 session_rng{std::random_device{}()};
++
++    // All live stream sessions share the single `stream_ctx`, whose `last_error`
++    // std::string is mutated (even on success — the capi clears it) by every
++    // parakeet_capi_stream_begin/feed/finalize call and read on the error path.
++    // The per-session mutex does NOT cover this: two sessions feeding at once run
++    // under disjoint sess->mu locks but hit the same ctx->last_error -> data race
++    // (formal UB on the string; heap corruption possible on the error path). This
++    // dedicated mutex serializes every capi call below together with its paired
++    // last_error read. Computes already serialize on the library's internal
++    // backend mutex, so the added contention is negligible.
++    //
++    // Lock order (acquire only in this order; never reverse):
++    //   sessions_mu  ->  sess->mu  ->  g_stream_api_mu
++    // g_stream_api_mu is a LEAF lock: no other mutex is ever acquired while it is
++    // held, so it cannot participate in a deadlock regardless of what is held when
++    // it is taken (begin holds sessions_mu; feed/finalize hold sess->mu).
++    std::mutex g_stream_api_mu;
++
++    // Lazy reaper (run on every /v1/stream request): collect idle sessions
++    // under the registry lock, free their streams after releasing it —
++    // freeing can block on an in-flight feed's session mutex and the registry
++    // lock must never be held across that wait.
++    auto reap_idle = [&]() {
++        std::vector<std::shared_ptr<StreamSess>> expired;
++        {
++            std::lock_guard<std::mutex> reg(sessions_mu);
++            const auto now = std::chrono::steady_clock::now();
++            for (auto it = sessions.begin(); it != sessions.end();) {
++                const auto idle = std::chrono::duration_cast<std::chrono::seconds>(
++                                      now - it->second->last_used).count();
++                if (idle > kSessionIdleReapSec) {
++                    expired.push_back(it->second);
++                    it = sessions.erase(it);
++                } else {
++                    ++it;
++                }
++            }
++        }
++        for (auto& s : expired) {
++            std::lock_guard<std::mutex> lk(s->mu);
++            if (s->stream) { parakeet_capi_stream_free(s->stream); s->stream = nullptr; }
++        }
++    };
++
++    // Look up a live session (shared ownership; caller locks sess->mu).
++    auto find_session = [&](const std::string& id) -> std::shared_ptr<StreamSess> {
++        std::lock_guard<std::mutex> reg(sessions_mu);
++        auto it = sessions.find(id);
++        return it == sessions.end() ? nullptr : it->second;
++    };
++
++    // Atomically remove a session from the registry (finalize / DELETE). Only
++    // one caller can win; concurrent finalize/DELETE on the same id 404s.
++    auto take_session = [&](const std::string& id) -> std::shared_ptr<StreamSess> {
++        std::lock_guard<std::mutex> reg(sessions_mu);
++        auto it = sessions.find(id);
++        if (it == sessions.end()) return nullptr;
++        auto s = it->second;
++        sessions.erase(it);
++        return s;
++    };
++
+     httplib::Server svr;
+     g_server = &svr;
+     std::signal(SIGINT, on_signal);
+     std::signal(SIGTERM, on_signal);
+ 
++    // Cap request bodies. httplib's default payload max is SIZE_MAX, so without
++    // this a single multi-GB POST is buffered whole (req.body) before any handler
++    // runs -> OOM. Bound it to one full session's worth of int16 PCM plus slack
++    // for the multipart batch upload's headers/WAV framing; oversized requests get
++    // a 413 from httplib before the body is read.
++    svr.set_payload_max_length(2 * kMaxSessionSamples + (1u << 20));  // ~19.2 MB + 1 MB
++
+     svr.Get("/health", [](const httplib::Request&, httplib::Response& res) {
+         res.set_content("{\"status\":\"ok\"}", "application/json");
+     });
+@@ -159,10 +298,184 @@ int main(int argc, char** argv) {
+         }
+     });
+ 
+-    std::fprintf(stderr, "parakeet-server: listening on http://%s:%d (model: %s)\n",
+-                 host.c_str(), port, model_path.c_str());
++    // ---- /v1/stream — incremental streaming over the cache-aware model -----
++
++    // POST /v1/stream/sessions -> {"id":"<hex>"}
++    svr.Post("/v1/stream/sessions",
++             [&](const httplib::Request&, httplib::Response& res) {
++        using namespace pkserver;
++        reap_idle();
++        if (!stream_ctx) {
++            res.status = 503;
++            res.set_content(error_body("streaming disabled; start the server with --stream-model",
++                                       "server_error"), "application/json");
++            return;
++        }
++        std::lock_guard<std::mutex> reg(sessions_mu);
++        if (sessions.size() >= kMaxStreamSessions) {
++            res.status = 429;
++            res.set_content(error_body("too many live stream sessions (max 8)",
++                                       "rate_limit_error"), "application/json");
++            return;
++        }
++        parakeet_stream* st = nullptr;
++        std::string begin_err;
++        {   // serialize the shared-ctx capi call + its last_error read (leaf lock)
++            std::lock_guard<std::mutex> api(g_stream_api_mu);
++            st = parakeet_capi_stream_begin(stream_ctx);
++            if (!st) begin_err = parakeet_capi_last_error(stream_ctx);
++        }
++        if (!st) {
++            res.status = 500;
++            res.set_content(error_body("stream_begin failed: " + begin_err,
++                                       "server_error"), "application/json");
++            return;
++        }
++        char idbuf[32];
++        std::snprintf(idbuf, sizeof(idbuf), "%016llx%08llx",
++                      (unsigned long long)session_rng(),
++                      (unsigned long long)session_counter.fetch_add(1));
++        auto sess = std::make_shared<StreamSess>();
++        sess->stream = st;
++        sess->last_used = std::chrono::steady_clock::now();
++        sessions.emplace(idbuf, sess);
++        res.set_content(std::string("{\"id\":\"") + idbuf + "\"}", "application/json");
++    });
++
++    // POST /v1/stream/sessions/<id>/audio
++    // Body: raw little-endian int16 mono 16 kHz PCM (application/octet-stream).
++    // -> {"text":"<newly-finalized text since last call>","eou":bool}
++    svr.Post(R"(/v1/stream/sessions/([0-9a-f]+)/audio)",
++             [&](const httplib::Request& req, httplib::Response& res) {
++        using namespace pkserver;
++        reap_idle();
++        auto fail = [&](int code, const std::string& msg, const char* type) {
++            res.status = code;
++            res.set_content(error_body(msg, type), "application/json");
++        };
++        if (req.body.empty() || req.body.size() % 2 != 0) {
++            fail(400, "body must be non-empty raw little-endian int16 mono 16 kHz PCM "
++                      "(even byte count)", "invalid_request_error");
++            return;
++        }
++        // Reject an oversized feed BEFORE allocating the int16->f32 vector, so a
++        // large body can't blow up memory even within the payload cap. A single
++        // feed never legitimately exceeds 30 s of 16 kHz audio.
++        const size_t n = req.body.size() / 2;
++        if (n > kMaxFeedSamples) {
++            fail(413, "audio feed exceeds 30 s; send smaller chunks", "invalid_request_error");
++            return;
++        }
++
++        auto sess = find_session(req.matches[1]);
++        if (!sess) { fail(404, "unknown or expired stream session", "invalid_request_error"); return; }
++
++        std::vector<float> pcm(n);
++        const unsigned char* b = (const unsigned char*)req.body.data();
++        for (size_t i = 0; i < n; ++i) {
++            const int16_t v = (int16_t)((unsigned)b[2 * i] | ((unsigned)b[2 * i + 1] << 8));
++            pcm[i] = (float)v / 32768.0f;
++        }
++
++        std::lock_guard<std::mutex> lk(sess->mu);
++        if (!sess->stream) {  // freed by reap/finalize/DELETE after our lookup
++            fail(404, "unknown or expired stream session", "invalid_request_error");
++            return;
++        }
++        if (sess->total_samples + n > kMaxSessionSamples) {
++            fail(413, "stream session exceeds 10 minutes of audio", "invalid_request_error");
++            return;
++        }
++        int eou = 0;
++        char* delta = nullptr;
++        std::string feed_err;
++        {   // serialize the shared-ctx capi call + its last_error read (leaf lock)
++            std::lock_guard<std::mutex> api(g_stream_api_mu);
++            delta = parakeet_capi_stream_feed(sess->stream, pcm.data(), (int)n, &eou);
++            if (!delta) feed_err = parakeet_capi_last_error(stream_ctx);
++        }
++        if (!delta) {
++            fail(500, "stream_feed failed: " + feed_err, "server_error");
++            return;
++        }
++        sess->total_samples += n;
++        sess->last_used = std::chrono::steady_clock::now();
++        std::string body = std::string("{\"text\":\"") + json_escape(delta) +
++                           "\",\"eou\":" + (eou ? "true" : "false") + "}";
++        parakeet_capi_free_string(delta);
++        res.set_content(body, "application/json");
++    });
++
++    // POST /v1/stream/sessions/<id>/finalize -> {"text":"<tail>"}; frees the session.
++    svr.Post(R"(/v1/stream/sessions/([0-9a-f]+)/finalize)",
++             [&](const httplib::Request& req, httplib::Response& res) {
++        using namespace pkserver;
++        reap_idle();
++        auto sess = take_session(req.matches[1]);
++        if (!sess) {
++            res.status = 404;
++            res.set_content(error_body("unknown or expired stream session",
++                                       "invalid_request_error"), "application/json");
++            return;
++        }
++        std::lock_guard<std::mutex> lk(sess->mu);
++        std::string tail;
++        bool ok = true;
++        std::string fin_err;
++        if (sess->stream) {
++            char* t = nullptr;
++            {   // serialize the shared-ctx capi call + its last_error read (leaf lock)
++                std::lock_guard<std::mutex> api(g_stream_api_mu);
++                t = parakeet_capi_stream_finalize(sess->stream);
++                if (!t) fin_err = parakeet_capi_last_error(stream_ctx);
++            }
++            if (t) { tail = t; parakeet_capi_free_string(t); } else { ok = false; }
++            parakeet_capi_stream_free(sess->stream);  // no last_error touch; leaf lock not needed
++            sess->stream = nullptr;
++        }
++        if (!ok) {
++            res.status = 500;
++            res.set_content(error_body("stream_finalize failed: " + fin_err,
++                                       "server_error"), "application/json");
++            return;
++        }
++        res.set_content("{\"text\":\"" + json_escape(tail) + "\"}", "application/json");
++    });
++
++    // DELETE /v1/stream/sessions/<id> -> {}
++    svr.Delete(R"(/v1/stream/sessions/([0-9a-f]+))",
++               [&](const httplib::Request& req, httplib::Response& res) {
++        using namespace pkserver;
++        reap_idle();
++        auto sess = take_session(req.matches[1]);
++        if (!sess) {
++            res.status = 404;
++            res.set_content(error_body("unknown or expired stream session",
++                                       "invalid_request_error"), "application/json");
++            return;
++        }
++        {
++            std::lock_guard<std::mutex> lk(sess->mu);
++            if (sess->stream) { parakeet_capi_stream_free(sess->stream); sess->stream = nullptr; }
++        }
++        res.set_content("{}", "application/json");
++    });
++
++    std::fprintf(stderr, "parakeet-server: listening on http://%s:%d (model: %s%s%s)\n",
++                 host.c_str(), port, model_path.c_str(),
++                 stream_ctx ? ", stream-model: " : "",
++                 stream_ctx ? stream_model_path.c_str() : "");
+     bool ok = svr.listen(host.c_str(), port);
+     g_server = nullptr;
++    for (auto& kv : sessions) {
++        std::lock_guard<std::mutex> lk(kv.second->mu);
++        if (kv.second->stream) {
++            parakeet_capi_stream_free(kv.second->stream);
++            kv.second->stream = nullptr;
++        }
++    }
++    sessions.clear();
++    if (stream_ctx) { parakeet_capi_free(stream_ctx); stream_ctx = nullptr; }
+     pk::shutdown_backend();
+     if (!ok) {
+         std::fprintf(stderr, "parakeet-server: failed to bind %s:%d\n", host.c_str(), port);
