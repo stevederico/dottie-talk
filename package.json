@@ -23,16 +23,17 @@
     "./ports.js": "./ports.js"
   },
   "bin": {
-    "dottie-talk": "./http.js"
+    "dottie-talk": "./cli.js"
   },
   "scripts": {
     "postinstall": "node -e \"import('node:fs').then(fs=>{for (const f of ['parakeet-server','koko']) {const p='bin/'+f; try{fs.chmodSync(p,0o755)}catch{}}})\"",
     "start": "node http.js",
+    "cli": "node cli.js",
     "mcp": "node mcp.js",
     "http": "node http.js",
     "tts": "node ensure-tts.js",
     "install:bins": "bash scripts/install_bins.sh",
-    "test": "node --test core.test.js"
+    "test": "node --test core.test.js cli.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0"

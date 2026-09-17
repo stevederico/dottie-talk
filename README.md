@@ -21,6 +21,15 @@ Bins ship in `bin/` (macOS). Models download on first boot (`~/.cache/parakeet.c
 | `npm start` | HTTP `:1320` (starts STT+TTS) |
 | `npm run mcp` | MCP stdio |
 | `npm run tts` | TTS only (`:1314`) |
+| `dottie-talk speak "hi"` | TTS → `speech.wav` (or `-o` / stdout) |
+| `dottie-talk transcribe a.wav` | STT → text on stdout |
+| `dottie-talk start` | same as `npm start` |
+| `dottie-talk health` | STT/TTS readiness JSON |
+
+```bash
+npx dottie-talk speak "hello" -o hello.wav
+npx dottie-talk transcribe hello.wav
+```
 
 Node ≥22. Override STT with `DOTTIE_STT=voxtype` or `DOTTIE_STT=parakeet`.
 
