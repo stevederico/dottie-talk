@@ -11,6 +11,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { transcribe, speak } from './core.js';
+import { ensureBinsRunning } from './bin_supervise.js';
 
 export const TALK_TOOLS = [
   {
@@ -79,5 +80,6 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
+  await ensureBinsRunning();
   await server.connect(new StdioServerTransport());
 }

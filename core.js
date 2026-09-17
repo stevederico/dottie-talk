@@ -48,7 +48,7 @@ export async function transcribe({ wavBase64, wavBuffer, fetchFn = globalThis.fe
     const gone = err.cause?.code === 'ECONNREFUSED' || /fetch failed/i.test(err.message);
     return {
       error: gone
-        ? `parakeet not running on :${PORTS.STT_PORT} — launch Dottie.app`
+        ? `parakeet not running on :${PORTS.STT_PORT} — start dottie-talk (node http.js) or ensureBinsRunning`
         : err.message,
     };
   }
@@ -88,10 +88,10 @@ export async function speak({ text, voice, fetchFn = globalThis.fetch } = {}) {
     const gone = err.cause?.code === 'ECONNREFUSED' || /fetch failed/i.test(err.message);
     return {
       error: gone
-        ? `koko not running on :${PORTS.TTS_PORT} — launch Dottie.app`
+        ? `koko not running on :${PORTS.TTS_PORT} — start dottie-talk (node http.js) or ensureBinsRunning`
         : err.message,
     };
   }
 }
 
-export const TALK_PORTS = { STT: PORTS.STT_PORT, TTS: PORTS.TTS_PORT, GATEWAY: PORTS.GATEWAY_PORT };
+export const TALK_PORTS = { STT: PORTS.STT_PORT, TTS: PORTS.TTS_PORT, HTTP: PORTS.TALK_HTTP_PORT };

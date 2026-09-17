@@ -18,8 +18,21 @@ import { PORTS } from './ports.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const HOME = os.homedir();
 const DOTTIE_DIR = path.join(HOME, '.dottie');
-const BUNDLED_BIN_DIR = process.env.DOTTIE_BIN_DIR
-  || path.resolve(__dirname, '..', '..', '..', 'bin');
+
+/** Prefer package-local bin/, then DOTTIE_BIN_DIR, then desktop submodule bin/. */
+function resolveBinDir() {
+  if (process.env.DOTTIE_BIN_DIR) return process.env.DOTTIE_BIN_DIR;
+  const local = path.join(__dirname, 'bin');
+  if (existsSync(path.join(local, 'parakeet-server')) || existsSync(path.join(local, 'koko'))) {
+    return local;
+  }
+  const desktop = path.resolve(__dirname, '..', '..', '..', 'bin');
+  if (existsSync(path.join(desktop, 'parakeet-server')) || existsSync(path.join(desktop, 'koko'))) {
+    return desktop;
+  }
+  return local;
+}
+const BUNDLED_BIN_DIR = resolveBinDir();
 
 const STT_GGUF = 'tdt-0.6b-v3-q8_0.gguf';
 const STT_GGUF_BYTES = 940663680;
@@ -183,7 +196,7 @@ async function spawnStt() {
   if (await healthOk(`http://127.0.0.1:${PORTS.STT_PORT}/health`)) return true;
   const bin = [path.join(BUNDLED_BIN_DIR, 'parakeet-server'), '/usr/local/bin/parakeet-server']
     .find((p) => existsSync(p));
-  if (!bin) throw new Error('parakeet-server not found — set DOTTIE_BIN_DIR or install bundle');
+  if (!bin) throw new Error(`parakeet-server not found in ${BUNDLED_BIN_DIR} — run ./scripts/install_parakeet_bundle.sh or set DOTTIE_BIN_DIR`);
   const legacyOnnx = path.join(DOTTIE_DIR, 'models', 'parakeet-tdt-0.6b-v3-int8');
   if (existsSync(legacyOnnx)) {
     try { rmSync(legacyOnnx, { recursive: true, force: true }); } catch { /* ok */ }
@@ -225,7 +238,7 @@ async function spawnStt() {
 async function spawnTts() {
   if (await healthOk(`http://127.0.0.1:${PORTS.TTS_PORT}/`)) return true;
   const bin = [path.join(BUNDLED_BIN_DIR, 'koko'), '/usr/local/bin/koko'].find((p) => existsSync(p));
-  if (!bin) throw new Error('koko not found — set DOTTIE_BIN_DIR or install bundle');
+  if (!bin) throw new Error(`koko not found in ${BUNDLED_BIN_DIR} — place koko binary there or set DOTTIE_BIN_DIR`);
   const kokoDataDir = await ensureKokoModels();
   const espeakDataDir = findEspeakData();
   ensureKokoEspeakSymlinks(bin, espeakDataDir);
