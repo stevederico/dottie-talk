@@ -27,7 +27,9 @@
     "dottie-talk": "./mcp.js"
   },
   "scripts": {
-    "mcp": "node mcp.js"
+    "mcp": "node mcp.js",
+    "http": "node http.js",
+    "install:bins": "bash scripts/install_bins.sh"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0"

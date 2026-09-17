@@ -21,8 +21,9 @@
 #
 # Usage:
 #   ./scripts/install_parakeet_bundle.sh /path/to/bin   # explicit
-#   ./scripts/install_parakeet_bundle.sh                # desktop submodule → ../../../../bin,
-#                                                      # else ./bin next to this package
+#   ./scripts/install_parakeet_bundle.sh                # → ../bin (package-local)
+#
+# Prefer scripts/install_bins.sh for full STT+TTS setup.
 #
 # Local patches: patches/parakeet/*.patch (relative to this package) applied on
 # top of the pin in lexical order (currently 01-server-stream-endpoints.patch —
@@ -42,13 +43,12 @@ REPO_URL="https://github.com/mudler/parakeet.cpp"
 SHORT_REF="${PARAKEET_REF:0:12}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Default: package-local bin/ (standalone). Pass a path or BUNDLE_OUT to override
+# (e.g. dottie-desktop/bin when packaging the Mac app).
 if [ -n "${1:-}" ]; then
     OUT="$1"
 elif [ -n "${BUNDLE_OUT:-}" ]; then
     OUT="$BUNDLE_OUT"
-elif [ -d "$SCRIPT_DIR/../../../../bin" ]; then
-    # Nested as backend/gateway/dottie-talk inside dottie-desktop
-    OUT="$SCRIPT_DIR/../../../../bin"
 else
     OUT="$SCRIPT_DIR/../bin"
 fi

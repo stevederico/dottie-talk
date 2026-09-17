@@ -32,7 +32,33 @@ function resolveBinDir() {
   }
   return local;
 }
-const BUNDLED_BIN_DIR = resolveBinDir();
+
+function binDir() {
+  return resolveBinDir();
+}
+
+function ensurePackageBinsInstalled() {
+  const dir = binDir();
+  const need = !existsSync(path.join(dir, 'parakeet-server')) || !existsSync(path.join(dir, 'koko'));
+  if (!need) return dir;
+  if (process.env.DOTTIE_SKIP_BIN_INSTALL === '1') {
+    throw new Error(`bins missing in ${dir} — run: npm run install:bins (or unset DOTTIE_SKIP_BIN_INSTALL)`);
+  }
+  const script = path.join(__dirname, 'scripts', 'install_bins.sh');
+  if (!existsSync(script)) {
+    throw new Error(`bins missing in ${dir} and install_bins.sh not found`);
+  }
+  log(`bins missing — running ${script} → ${path.join(__dirname, 'bin')}`);
+  execSync(`bash "${script}" "${path.join(__dirname, 'bin')}"`, {
+    stdio: 'inherit',
+    env: process.env,
+  });
+  const local = path.join(__dirname, 'bin');
+  if (!existsSync(path.join(local, 'parakeet-server')) || !existsSync(path.join(local, 'koko'))) {
+    throw new Error(`install_bins.sh finished but bins still missing under ${local}`);
+  }
+  return local;
+}
 
 const STT_GGUF = 'tdt-0.6b-v3-q8_0.gguf';
 const STT_GGUF_BYTES = 940663680;
@@ -120,9 +146,9 @@ function hasValidKokoModels(dir) {
 }
 
 async function ensureKokoModels() {
+  const bundled = binDir();
   const candidates = [
-    path.resolve(BUNDLED_BIN_DIR, '..'),
-    path.resolve(__dirname, '..', '..', '..'),
+    path.resolve(bundled, '..'),
     DOTTIE_DIR,
   ];
   const ready = candidates.find(hasValidKokoModels);
@@ -139,9 +165,10 @@ async function ensureKokoModels() {
 }
 
 function findEspeakData() {
+  const bundled = binDir();
   for (const d of [
-    path.join(BUNDLED_BIN_DIR, 'espeak-ng-data'),
-    path.join(BUNDLED_BIN_DIR, '..', 'espeak-ng-data'),
+    path.join(bundled, 'espeak-ng-data'),
+    path.join(bundled, '..', 'espeak-ng-data'),
     '/opt/homebrew/share/espeak-ng-data',
     '/usr/local/share/espeak-ng-data',
   ]) {
@@ -194,9 +221,10 @@ function track(name, proc) {
 
 async function spawnStt() {
   if (await healthOk(`http://127.0.0.1:${PORTS.STT_PORT}/health`)) return true;
-  const bin = [path.join(BUNDLED_BIN_DIR, 'parakeet-server'), '/usr/local/bin/parakeet-server']
+  const dir = ensurePackageBinsInstalled();
+  const bin = [path.join(dir, 'parakeet-server'), '/usr/local/bin/parakeet-server']
     .find((p) => existsSync(p));
-  if (!bin) throw new Error(`parakeet-server not found in ${BUNDLED_BIN_DIR} — run ./scripts/install_parakeet_bundle.sh or set DOTTIE_BIN_DIR`);
+  if (!bin) throw new Error(`parakeet-server not found in ${dir} — run: npm run install:bins`);
   const legacyOnnx = path.join(DOTTIE_DIR, 'models', 'parakeet-tdt-0.6b-v3-int8');
   if (existsSync(legacyOnnx)) {
     try { rmSync(legacyOnnx, { recursive: true, force: true }); } catch { /* ok */ }
@@ -237,8 +265,9 @@ async function spawnStt() {
 
 async function spawnTts() {
   if (await healthOk(`http://127.0.0.1:${PORTS.TTS_PORT}/`)) return true;
-  const bin = [path.join(BUNDLED_BIN_DIR, 'koko'), '/usr/local/bin/koko'].find((p) => existsSync(p));
-  if (!bin) throw new Error(`koko not found in ${BUNDLED_BIN_DIR} — place koko binary there or set DOTTIE_BIN_DIR`);
+  const dir = ensurePackageBinsInstalled();
+  const bin = [path.join(dir, 'koko'), '/usr/local/bin/koko'].find((p) => existsSync(p));
+  if (!bin) throw new Error(`koko not found in ${dir} — run: npm run install:bins`);
   const kokoDataDir = await ensureKokoModels();
   const espeakDataDir = findEspeakData();
   ensureKokoEspeakSymlinks(bin, espeakDataDir);
