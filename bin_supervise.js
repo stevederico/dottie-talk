@@ -24,10 +24,15 @@ const DATA_DIR = process.env.DOTTIE_TALK_DATA
     : path.join(HOME, '.cache', 'dottie-talk'));
 const DOTTIE_DIR = DATA_DIR;
 
-/** Prefer package-local bin/, then DOTTIE_BIN_DIR. */
+/** Prefer DOTTIE_BIN_DIR when it actually has bins (app-signed Resources/bin);
+ *  else package-local bin/ so standalone clones ignore a stale env. */
 function resolveBinDir() {
-  if (process.env.DOTTIE_BIN_DIR) return process.env.DOTTIE_BIN_DIR;
-  return path.join(__dirname, 'bin');
+  const local = path.join(__dirname, 'bin');
+  const env = process.env.DOTTIE_BIN_DIR;
+  const has = (dir) => existsSync(path.join(dir, 'parakeet-server')) && existsSync(path.join(dir, 'koko'));
+  if (env && has(env)) return env;
+  if (has(local)) return local;
+  return env || local;
 }
 
 function binDir() {

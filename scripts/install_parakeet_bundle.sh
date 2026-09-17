@@ -43,8 +43,7 @@ REPO_URL="https://github.com/mudler/parakeet.cpp"
 SHORT_REF="${PARAKEET_REF:0:12}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Default: package-local bin/ (standalone). Pass a path or BUNDLE_OUT to override
-# (e.g. dottie-desktop/bin when packaging the Mac app).
+# Default: package-local bin/ (standalone). Pass a path or BUNDLE_OUT to override.
 if [ -n "${1:-}" ]; then
     OUT="$1"
 elif [ -n "${BUNDLE_OUT:-}" ]; then

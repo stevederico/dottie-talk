@@ -1,6 +1,6 @@
 /**
  * Local voice ports — package-owned (standalone).
- * STT/TTS numbers must stay aligned with desktop gateway/ports.js + Swift AppPorts.
+ * Consumers that share a machine with Dottie.app should keep these numbers.
  */
 export const PORTS = Object.freeze({
   TTS_PORT: 1314,
