@@ -1,6 +1,6 @@
 /**
- * Own STT (parakeet :1315) + TTS (koko :1314). Spawned when talk HTTP boots.
- * Gateway no longer supervises these binaries directly.
+ * Own STT (parakeet :1315 or system voxtype) + TTS (koko :1314).
+ * Spawned when talk HTTP boots. Gateway no longer supervises these binaries.
  */
 
 import { spawn, execSync } from 'node:child_process';
@@ -24,14 +24,41 @@ const DATA_DIR = process.env.DOTTIE_TALK_DATA
     : path.join(HOME, '.cache', 'dottie-talk'));
 const DOTTIE_DIR = DATA_DIR;
 
+/**
+ * STT backend: DOTTIE_STT=voxtype|parakeet overrides; else linux/android → voxtype, else parakeet.
+ * @returns {'voxtype'|'parakeet'}
+ */
+export function sttBackend() {
+  const raw = (process.env.DOTTIE_STT || '').trim().toLowerCase();
+  if (raw === 'voxtype' || raw === 'parakeet') return raw;
+  if (process.platform === 'linux' || process.platform === 'android') return 'voxtype';
+  return 'parakeet';
+}
+
+function needsParakeetBin() {
+  return sttBackend() === 'parakeet';
+}
+
+function dirHasRequiredBins(dir) {
+  if (!existsSync(path.join(dir, 'koko'))) return false;
+  if (needsParakeetBin() && !existsSync(path.join(dir, 'parakeet-server'))) return false;
+  return true;
+}
+
+function binPathEnv() {
+  if (process.platform === 'darwin') {
+    return `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH || ''}`;
+  }
+  return process.env.PATH || '/usr/local/bin:/usr/bin:/bin';
+}
+
 /** Prefer DOTTIE_BIN_DIR when it actually has bins (app-signed Resources/bin);
  *  else package-local bin/ so standalone clones ignore a stale env. */
 function resolveBinDir() {
   const local = path.join(__dirname, 'bin');
   const env = process.env.DOTTIE_BIN_DIR;
-  const has = (dir) => existsSync(path.join(dir, 'parakeet-server')) && existsSync(path.join(dir, 'koko'));
-  if (env && has(env)) return env;
-  if (has(local)) return local;
+  if (env && dirHasRequiredBins(env)) return env;
+  if (dirHasRequiredBins(local)) return local;
   return env || local;
 }
 
@@ -41,8 +68,7 @@ function binDir() {
 
 function ensurePackageBinsInstalled() {
   const dir = binDir();
-  const need = !existsSync(path.join(dir, 'parakeet-server')) || !existsSync(path.join(dir, 'koko'));
-  if (!need) return dir;
+  if (dirHasRequiredBins(dir)) return dir;
   if (process.env.DOTTIE_SKIP_BIN_INSTALL === '1') {
     throw new Error(`bins missing in ${dir} — run: npm run install:bins (or unset DOTTIE_SKIP_BIN_INSTALL)`);
   }
@@ -56,11 +82,26 @@ function ensurePackageBinsInstalled() {
     env: process.env,
   });
   const local = path.join(__dirname, 'bin');
-  if (!existsSync(path.join(local, 'parakeet-server')) || !existsSync(path.join(local, 'koko'))) {
+  if (!dirHasRequiredBins(local)) {
     throw new Error(`install_bins.sh finished but bins still missing under ${local}`);
   }
   return local;
 }
+
+function voxtypeOnPath() {
+  try {
+    execSync('sh -c "command -v voxtype"', {
+      stdio: 'ignore',
+      env: { ...process.env, PATH: binPathEnv() },
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const VOXTYPE_MISSING =
+  'voxtype not found on PATH — Omarchy: Install > AI > Dictation, or install voxtype-bin';
 
 const STT_GGUF = 'tdt-0.6b-v3-q8_0.gguf';
 const STT_GGUF_BYTES = 940663680;
@@ -173,6 +214,7 @@ function findEspeakData() {
     path.join(bundled, '..', 'espeak-ng-data'),
     '/opt/homebrew/share/espeak-ng-data',
     '/usr/local/share/espeak-ng-data',
+    '/usr/share/espeak-ng-data',
   ]) {
     if (existsSync(path.join(d, 'phontab'))) return d;
   }
@@ -221,7 +263,16 @@ function track(name, proc) {
   });
 }
 
+async function ensureVoxtypeReady() {
+  if (voxtypeOnPath()) {
+    log('STT backend=voxtype (system CLI)');
+    return true;
+  }
+  throw new Error(VOXTYPE_MISSING);
+}
+
 async function spawnStt() {
+  if (sttBackend() === 'voxtype') return ensureVoxtypeReady();
   if (await healthOk(`http://127.0.0.1:${PORTS.STT_PORT}/health`)) return true;
   const dir = ensurePackageBinsInstalled();
   const bin = [path.join(dir, 'parakeet-server'), '/usr/local/bin/parakeet-server']
@@ -253,7 +304,7 @@ async function spawnStt() {
   log(`spawning STT ${bin}`);
   const proc = spawn(bin, args, {
     cwd: DOTTIE_DIR,
-    env: { ...process.env, PATH: `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH}` },
+    env: { ...process.env, PATH: binPathEnv() },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
   track('stt', proc);
@@ -271,7 +322,7 @@ function resolveKokoBin() {
   for (const p of ['/usr/local/bin/koko', '/opt/homebrew/bin/koko']) {
     if (existsSync(p)) return p;
   }
-  // Last resort: install script (may also fetch parakeet).
+  // Last resort: install script (may also fetch parakeet when needed).
   try {
     const installed = ensurePackageBinsInstalled();
     const bin = path.join(installed, 'koko');
@@ -292,7 +343,7 @@ async function spawnTts() {
     cwd: kokoDataDir,
     env: {
       ...process.env,
-      PATH: `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH}`,
+      PATH: binPathEnv(),
       PIPER_ESPEAKNG_DATA_DIRECTORY: espeakDataDir,
     },
     stdio: ['ignore', 'ignore', 'pipe'],
@@ -334,9 +385,12 @@ export async function ensureBinsRunning() {
 
 /** Aggregate readiness for talk /health. */
 export async function binsHealth() {
-  const stt = await healthOk(`http://127.0.0.1:${PORTS.STT_PORT}/health`);
+  const backend = sttBackend();
+  const stt = backend === 'voxtype'
+    ? voxtypeOnPath()
+    : await healthOk(`http://127.0.0.1:${PORTS.STT_PORT}/health`);
   const tts = await healthOk(`http://127.0.0.1:${PORTS.TTS_PORT}/`);
-  return { stt, tts, ok: stt && tts };
+  return { stt, tts, ok: stt && tts, backend };
 }
 
 export function stopBins() {

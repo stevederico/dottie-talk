@@ -148,7 +148,7 @@ cmake -S "$STAGING" -B "$STAGING/build" \
     >/dev/null
 cmake --build "$STAGING/build" -j --target parakeet-server >/dev/null
 
-SRC=$(find "$STAGING/build" -type f -name 'parakeet-server' -perm +111 | head -1)
+SRC=$(find "$STAGING/build" -type f -name 'parakeet-server' -print | while read -r f; do [ -x "$f" ] && echo "$f" && break; done | head -1)
 [ -n "$SRC" ] || die "parakeet-server not produced; check upstream build layout"
 
 # Verify the static link held — a shared build would ship @rpath libggml*

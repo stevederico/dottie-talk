@@ -7,11 +7,19 @@
 import http from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { PORTS } from './ports.js';
-import { ensureBinsRunning, binsHealth, stopBins } from './bin_supervise.js';
+import { ensureBinsRunning, binsHealth, stopBins, sttBackend } from './bin_supervise.js';
 import { transcribe, speak } from './core.js';
 
 const STT = `http://127.0.0.1:${PORTS.STT_PORT}`;
 const TTS = `http://127.0.0.1:${PORTS.TTS_PORT}`;
+
+function sttProxyUnavailable(res) {
+  res.writeHead(501, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({
+    error: 'streaming/multipart STT requires parakeet — use JSON /v1/audio/transcriptions or DOTTIE_STT=parakeet',
+    backend: sttBackend(),
+  }));
+}
 
 async function proxy(req, res, targetBase) {
   const url = new URL(req.url || '/', 'http://127.0.0.1');
@@ -65,6 +73,10 @@ export async function handleTalkRequest(req, res) {
         res.end(JSON.stringify(result.error ? { error: result.error } : { text: result.text }));
         return;
       }
+      if (sttBackend() === 'voxtype') {
+        sttProxyUnavailable(res);
+        return;
+      }
       // multipart / raw → proxy to parakeet (preserves streaming clients)
       await proxy(req, res, STT);
       return;
@@ -78,6 +90,10 @@ export async function handleTalkRequest(req, res) {
 
     // Streaming STT + TTS root health
     if (url.pathname.startsWith('/v1/stream/')) {
+      if (sttBackend() === 'voxtype') {
+        sttProxyUnavailable(res);
+        return;
+      }
       await proxy(req, res, STT);
       return;
     }

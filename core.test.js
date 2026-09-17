@@ -1,6 +1,7 @@
-import { describe, it } from 'node:test';
+import { describe, it, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { transcribe, speak, TALK_PORTS } from './core.js';
+import { sttBackend } from './bin_supervise.js';
 
 describe('TALK_PORTS', () => {
   it('exposes STT TTS HTTP', () => {
@@ -10,23 +11,69 @@ describe('TALK_PORTS', () => {
   });
 });
 
+describe('sttBackend', () => {
+  const prev = process.env.DOTTIE_STT;
+  after(() => {
+    if (prev === undefined) delete process.env.DOTTIE_STT;
+    else process.env.DOTTIE_STT = prev;
+  });
+
+  it('honors DOTTIE_STT=voxtype', () => {
+    process.env.DOTTIE_STT = 'voxtype';
+    assert.equal(sttBackend(), 'voxtype');
+  });
+
+  it('honors DOTTIE_STT=parakeet', () => {
+    process.env.DOTTIE_STT = 'parakeet';
+    assert.equal(sttBackend(), 'parakeet');
+  });
+});
+
 describe('transcribe', () => {
   it('requires audio', async () => {
     const r = await transcribe({});
     assert.match(r.error, /wavBase64|wavBuffer/);
   });
 
-  it('parses STT JSON', async () => {
-    const fetchFn = async () => ({
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify({ text: 'hello' }),
-    });
-    const r = await transcribe({
-      wavBuffer: Buffer.from('RIFF'),
-      fetchFn,
-    });
-    assert.equal(r.text, 'hello');
+  it('parses STT JSON via parakeet', async () => {
+    const prev = process.env.DOTTIE_STT;
+    process.env.DOTTIE_STT = 'parakeet';
+    try {
+      const fetchFn = async () => ({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ text: 'hello' }),
+      });
+      const r = await transcribe({
+        wavBuffer: Buffer.from('RIFF'),
+        fetchFn,
+      });
+      assert.equal(r.text, 'hello');
+    } finally {
+      if (prev === undefined) delete process.env.DOTTIE_STT;
+      else process.env.DOTTIE_STT = prev;
+    }
+  });
+
+  it('uses voxtype CLI when backend=voxtype', async () => {
+    const prev = process.env.DOTTIE_STT;
+    process.env.DOTTIE_STT = 'voxtype';
+    try {
+      const execFileFn = async (cmd, args) => {
+        assert.equal(cmd, 'voxtype');
+        assert.equal(args[0], 'transcribe');
+        assert.match(args[1], /\.wav$/);
+        return { stdout: 'hello from voxtype\n', stderr: '' };
+      };
+      const r = await transcribe({
+        wavBuffer: Buffer.from('RIFF'),
+        execFileFn,
+      });
+      assert.equal(r.text, 'hello from voxtype');
+    } finally {
+      if (prev === undefined) delete process.env.DOTTIE_STT;
+      else process.env.DOTTIE_STT = prev;
+    }
   });
 });
 

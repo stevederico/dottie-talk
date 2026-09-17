@@ -1,9 +1,17 @@
 /**
  * dottie-talk core — local STT/TTS muscles only (:1315 / :1314).
- * No gateway :1317 hop.
+ * No gateway :1317 hop. Linux/Omarchy STT uses system voxtype CLI.
  */
 
+import { execFile } from 'node:child_process';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
 import { PORTS } from './ports.js';
+import { sttBackend } from './bin_supervise.js';
+
+const execFileAsync = promisify(execFile);
 
 const STT = `http://127.0.0.1:${PORTS.STT_PORT}`;
 const TTS = `http://127.0.0.1:${PORTS.TTS_PORT}`;
@@ -13,9 +21,15 @@ const TTS = `http://127.0.0.1:${PORTS.TTS_PORT}`;
  * @param {string} [opts.wavBase64]
  * @param {Buffer|Uint8Array} [opts.wavBuffer]
  * @param {typeof fetch} [opts.fetchFn]
+ * @param {(file: string, args: string[], opts?: object) => Promise<{ stdout: string, stderr: string }>} [opts.execFileFn]
  * @returns {Promise<{ text: string }|{ error: string }>}
  */
-export async function transcribe({ wavBase64, wavBuffer, fetchFn = globalThis.fetch } = {}) {
+export async function transcribe({
+  wavBase64,
+  wavBuffer,
+  fetchFn = globalThis.fetch,
+  execFileFn = execFileAsync,
+} = {}) {
   let buf = wavBuffer;
   if (!buf && typeof wavBase64 === 'string') {
     buf = Buffer.from(wavBase64, 'base64');
@@ -24,6 +38,49 @@ export async function transcribe({ wavBase64, wavBuffer, fetchFn = globalThis.fe
     return { error: 'wavBase64 or wavBuffer required' };
   }
 
+  if (sttBackend() === 'voxtype') {
+    return transcribeVoxtype(buf, execFileFn);
+  }
+  return transcribeParakeet(buf, fetchFn);
+}
+
+/**
+ * @param {Buffer|Uint8Array} buf
+ * @param {(file: string, args: string[], opts?: object) => Promise<{ stdout: string, stderr: string }>} execFileFn
+ */
+async function transcribeVoxtype(buf, execFileFn) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'dottie-talk-'));
+  const wavPath = path.join(dir, 'audio.wav');
+  try {
+    writeFileSync(wavPath, buf);
+    const { stdout, stderr } = await execFileFn('voxtype', ['transcribe', wavPath], {
+      timeout: 60_000,
+      maxBuffer: 10 * 1024 * 1024,
+      encoding: 'utf8',
+    });
+    const text = String(stdout || '').trim();
+    if (!text && stderr) {
+      return { error: `voxtype: ${String(stderr).slice(0, 300)}` };
+    }
+    return { text };
+  } catch (err) {
+    const msg = err.stderr ? String(err.stderr).trim() : err.message;
+    if (/ENOENT|not found/i.test(msg) || err.code === 'ENOENT') {
+      return {
+        error: 'voxtype not found on PATH — Omarchy: Install > AI > Dictation, or install voxtype-bin',
+      };
+    }
+    return { error: `voxtype: ${String(msg).slice(0, 300)}` };
+  } finally {
+    try { rmSync(dir, { recursive: true, force: true }); } catch { /* ok */ }
+  }
+}
+
+/**
+ * @param {Buffer|Uint8Array} buf
+ * @param {typeof fetch} fetchFn
+ */
+async function transcribeParakeet(buf, fetchFn) {
   const form = new FormData();
   form.append('file', new Blob([buf], { type: 'audio/wav' }), 'audio.wav');
 

@@ -10,6 +10,7 @@
 #   KOKOROS_REF         git ref for lucasjinreal/Kokoros (default: main)
 #   SKIP_PARAKEET=1     skip STT binary
 #   SKIP_KOKO=1         skip TTS binary
+#   DOTTIE_STT          voxtype|parakeet — on linux defaults to skip parakeet unless parakeet
 
 set -euo pipefail
 
@@ -21,6 +22,18 @@ KOKOROS_REF="${KOKOROS_REF:-main}"
 
 log() { printf '[talk-bins] %s\n' "$*" >&2; }
 die() { printf '[talk-bins] ERROR: %s\n' "$*" >&2; exit 1; }
+
+# Linux/Omarchy: Voxtype is system STT — skip bundling parakeet unless forced.
+if [ -z "${SKIP_PARAKEET:-}" ]; then
+  case "$(uname -s)" in
+    Linux)
+      case "${DOTTIE_STT:-voxtype}" in
+        parakeet) ;;
+        *) SKIP_PARAKEET=1; log "SKIP_PARAKEET=1 (linux STT=voxtype; set DOTTIE_STT=parakeet to build)" ;;
+      esac
+      ;;
+  esac
+fi
 
 mkdir -p "$OUT"
 
@@ -49,14 +62,15 @@ install_koko_espeak() {
   for d in \
     "$OUT/espeak-ng-data" \
     "/opt/homebrew/share/espeak-ng-data" \
-    "/usr/local/share/espeak-ng-data"; do
+    "/usr/local/share/espeak-ng-data" \
+    "/usr/share/espeak-ng-data"; do
     if [ -f "$d/phontab" ]; then
       src_dir="$d"
       break
     fi
   done
   if [ -z "$src_dir" ]; then
-    log "WARN: espeak-ng-data not found — brew install espeak-ng, or keep espeak-ng-data in $OUT"
+    log "WARN: espeak-ng-data not found — install espeak-ng (brew/pacman/apt), or keep espeak-ng-data in $OUT"
     return 0
   fi
   if [ "$src_dir" = "$OUT/espeak-ng-data" ]; then
@@ -65,6 +79,14 @@ install_koko_espeak() {
   rm -rf "$OUT/espeak-ng-data"
   cp -a "$src_dir" "$OUT/espeak-ng-data"
   log "espeak-ng-data from $src_dir"
+}
+
+opus_hint() {
+  case "$(uname -s)" in
+    Darwin) printf 'brew install pkg-config opus' ;;
+    Linux) printf 'pacman -S pkgconf opus  # or: apt install pkg-config libopus-dev' ;;
+    *) printf 'install pkg-config + opus' ;;
+  esac
 }
 
 install_koko_cargo() {
@@ -80,11 +102,10 @@ install_koko_cargo() {
     git -C "$staging" fetch -q --depth 1 origin "$KOKOROS_REF" 2>/dev/null || true
     git -C "$staging" checkout -q FETCH_HEAD 2>/dev/null || git -C "$staging" pull -q --ff-only || true
   fi
-  log "cargo build --release (kokoros) — needs pkg-config + opus (brew install pkg-config opus)"
+  log "cargo build --release (kokoros) — needs pkg-config + opus ($(opus_hint))"
   (cd "$staging" && cargo build --release --bin koko)
-  local built
-  built=$(find "$staging/target/release" -maxdepth 1 -type f -name koko -perm +111 | head -1)
-  [ -n "$built" ] || return 1
+  local built="$staging/target/release/koko"
+  [ -x "$built" ] || return 1
   cp -a "$built" "$OUT/koko"
   chmod +x "$OUT/koko"
   log "koko built → $OUT/koko"
@@ -100,11 +121,11 @@ if [ -z "${SKIP_KOKO:-}" ]; then
       || install_koko_cargo; then
       :
     else
-      die "koko not found — place binary at $OUT/koko, or install Rust (cargo) + brew pkg-config opus"
+      die "koko not found — place binary at $OUT/koko, or install Rust (cargo) + $(opus_hint)"
     fi
   fi
   install_koko_espeak
 fi
 
 log "done. $OUT"
-ls -lh "$OUT/parakeet-server" "$OUT/koko" 2>/dev/null || true
+ls -lh "$OUT/parakeet-server" "$OUT/koko" 2>/dev/null || ls -lh "$OUT/koko" 2>/dev/null || true
