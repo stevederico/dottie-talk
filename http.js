@@ -1,6 +1,7 @@
+#!/usr/bin/env node
 /**
  * dottie-talk HTTP — owns STT/TTS binaries and proxies audio APIs.
- * Listen: DOTTIE_TALK_HTTP_PORT=1320 node http.js
+ * Default: node http.js  →  127.0.0.1:1320
  */
 
 import http from 'node:http';
@@ -119,8 +120,9 @@ export function createTalkServer() {
   });
 }
 
-const port = Number(process.env.DOTTIE_TALK_HTTP_PORT || 0);
-if (port > 0 && process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  const port = Number(process.env.DOTTIE_TALK_HTTP_PORT || PORTS.TALK_HTTP_PORT);
   ensureBinsRunning()
     .then(() => {
       const server = createTalkServer();

@@ -1,9 +1,9 @@
 {
   "name": "dottie-talk",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "license": "MIT",
   "type": "module",
-  "description": "Local parakeet STT + koko TTS via MCP and HTTP \u2014 standalone, no gateway hop",
+  "description": "Local parakeet STT + koko TTS via MCP and HTTP — standalone, no gateway hop",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/stevederico/dottie-talk.git"
@@ -23,12 +23,13 @@
     "./ports.js": "./ports.js"
   },
   "bin": {
-    "dottie-talk": "./mcp.js"
+    "dottie-talk": "./http.js"
   },
   "scripts": {
-    "setup": "npm install && npm run install:bins",
+    "postinstall": "node -e \"import('node:fs').then(fs=>{for (const f of ['parakeet-server','koko']) {const p='bin/'+f; try{fs.chmodSync(p,0o755)}catch{}}})\"",
+    "start": "node http.js",
     "mcp": "node mcp.js",
-    "http": "DOTTIE_TALK_HTTP_PORT=1320 node http.js",
+    "http": "node http.js",
     "tts": "node ensure-tts.js",
     "install:bins": "bash scripts/install_bins.sh",
     "test": "node --test core.test.js"
