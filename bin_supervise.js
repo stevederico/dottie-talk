@@ -17,7 +17,12 @@ import { PORTS } from './ports.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const HOME = os.homedir();
-const DOTTIE_DIR = path.join(HOME, '.dottie');
+/** Prefer standalone cache; reuse ~/.dottie if models already there. */
+const DATA_DIR = process.env.DOTTIE_TALK_DATA
+  || (existsSync(path.join(HOME, '.dottie', 'checkpoints', 'kokoro-v1.0.onnx'))
+    ? path.join(HOME, '.dottie')
+    : path.join(HOME, '.cache', 'dottie-talk'));
+const DOTTIE_DIR = DATA_DIR;
 
 /** Prefer package-local bin/, then DOTTIE_BIN_DIR, then desktop submodule bin/. */
 function resolveBinDir() {
