@@ -25,3 +25,9 @@ Bins ship in `bin/` (macOS). Models download on first boot (`~/.cache/parakeet.c
 Node ≥22. Override STT with `DOTTIE_STT=voxtype` or `DOTTIE_STT=parakeet`.
 
 Linux: install Voxtype first (Omarchy: Install → AI → Dictation, or `voxtype-bin`). Streaming/multipart STT needs parakeet — buffered JSON `/v1/audio/transcriptions` works on both.
+
+## Related
+
+- [talk-keys](https://github.com/stevederico/talk-keys) — macOS hotkeys for speak / dictate
+- [dottie-desktop](https://github.com/stevederico/dottie-desktop) — desktop app
+- [local-ai-cli](https://github.com/stevederico/local-ai-cli) — local AI CLI
