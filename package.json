@@ -27,14 +27,9 @@
     "dottie-talk": "./mcp.js"
   },
   "scripts": {
-    "mcp": "node mcp.js",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "mcp": "node mcp.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0"
-  },
-  "devDependencies": {
-    "vitest": "^4.1.4"
   }
 }
