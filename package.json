@@ -23,7 +23,9 @@
     "./ports.js": "./ports.js"
   },
   "bin": {
-    "dottie-talk": "./cli.js"
+    "dottie-talk": "./cli.js",
+    "transcribe": "./cli.js",
+    "speak": "./cli.js"
   },
   "scripts": {
     "postinstall": "node -e \"import('node:fs').then(fs=>{for (const f of ['parakeet-server','koko']) {const p='bin/'+f; try{fs.chmodSync(p,0o755)}catch{}}})\"",

@@ -25,6 +25,8 @@ function usage(code = 0) {
 Usage:
   dottie-talk speak <text> [-o out.wav] [--voice <id>]
   dottie-talk transcribe <audio.wav>
+  speak <text> [-o out.wav] [--voice <id>]
+  transcribe <audio.wav>
   dottie-talk start
   dottie-talk health
   dottie-talk help
@@ -42,19 +44,26 @@ start runs the HTTP façade on :${PORTS.TALK_HTTP_PORT}.
  * @returns {{ cmd: string, text: string, file: string, out: string, voice: string }}
  */
 export function parseArgs(argv) {
-  const args = argv.slice(2);
-  const cmd = args[0] || 'help';
+  const bin = path.basename(argv[1] || '').replace(/\.js$/, '');
+  let rest = argv.slice(2);
+  let cmd;
+  if (bin === 'transcribe' || bin === 'speak') {
+    cmd = bin;
+  } else {
+    cmd = rest[0] || 'help';
+    rest = rest.slice(1);
+  }
   let out = '';
   let voice = '';
   const positionals = [];
-  for (let i = 1; i < args.length; i++) {
-    const a = args[i];
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i];
     if (a === '-o' || a === '--out') {
-      out = args[++i] || '';
+      out = rest[++i] || '';
       continue;
     }
     if (a === '--voice') {
-      voice = args[++i] || '';
+      voice = rest[++i] || '';
       continue;
     }
     if (a.startsWith('-')) continue;
@@ -71,7 +80,7 @@ export function parseArgs(argv) {
 
 async function cmdSpeak({ text, out, voice }) {
   if (!text.trim()) {
-    process.stderr.write('usage: dottie-talk speak <text> [-o out.wav]\n');
+    process.stderr.write('usage: speak <text> [-o out.wav]\n');
     process.exit(1);
   }
   await ensureBinsRunning();
@@ -97,7 +106,7 @@ async function cmdSpeak({ text, out, voice }) {
 
 async function cmdTranscribe({ file }) {
   if (!file) {
-    process.stderr.write('usage: dottie-talk transcribe <audio.wav>\n');
+    process.stderr.write('usage: transcribe <audio.wav>\n');
     process.exit(1);
   }
   await ensureBinsRunning();

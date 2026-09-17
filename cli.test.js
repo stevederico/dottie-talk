@@ -17,6 +17,19 @@ describe('parseArgs', () => {
     assert.equal(r.file, 'clip.wav');
   });
 
+  it('parses bare transcribe bin', () => {
+    const r = parseArgs(['node', '/usr/local/bin/transcribe', 'clip.wav']);
+    assert.equal(r.cmd, 'transcribe');
+    assert.equal(r.file, 'clip.wav');
+  });
+
+  it('parses bare speak bin', () => {
+    const r = parseArgs(['node', 'speak', 'hello', 'there', '-o', 'out.wav']);
+    assert.equal(r.cmd, 'speak');
+    assert.equal(r.text, 'hello there');
+    assert.equal(r.out, 'out.wav');
+  });
+
   it('defaults to help', () => {
     assert.equal(parseArgs(['node', 'cli.js']).cmd, 'help');
   });
