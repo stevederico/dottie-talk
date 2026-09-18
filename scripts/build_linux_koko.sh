@@ -54,9 +54,15 @@ ldd "$STAGE/koko" | awk '
       print path
   }
 ' | while read -r so; do
-  [ -f "$so" ] || continue
-  cp -a "$so" "$STAGE/lib/"
-  log "bundle $(basename "$so")"
+  [ -e "$so" ] || continue
+  real=$(readlink -f "$so")
+  [ -f "$real" ] || continue
+  cp -a "$real" "$STAGE/lib/$(basename "$real")"
+  soname=$(basename "$so")
+  if [ "$soname" != "$(basename "$real")" ]; then
+    ln -sfn "$(basename "$real")" "$STAGE/lib/$soname"
+  fi
+  log "bundle $soname -> $(basename "$real")"
 done
 
 if command -v patchelf >/dev/null; then
