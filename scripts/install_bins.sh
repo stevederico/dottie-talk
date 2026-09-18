@@ -102,6 +102,35 @@ is_native_koko() {
   esac
 }
 
+# Prebuilt Linux koko + bundled .so (no pacman). GitHub Actions publishes linux-bins.
+KOKO_LINUX_URL="${KOKO_LINUX_URL:-https://github.com/stevederico/dottie-talk/releases/download/linux-bins/koko-linux-x86_64.tar.gz}"
+
+install_koko_linux_prebuilt() {
+  [ "$(uname -s)" = "Linux" ] || return 1
+  command -v curl >/dev/null || command -v wget >/dev/null || return 1
+  local tmp tarball
+  tmp=$(mktemp -d)
+  tarball="$tmp/koko-linux-x86_64.tar.gz"
+  log "download $KOKO_LINUX_URL"
+  if command -v curl >/dev/null; then
+    curl -fsSL "$KOKO_LINUX_URL" -o "$tarball" || { rm -rf "$tmp"; return 1; }
+  else
+    wget -qO "$tarball" "$KOKO_LINUX_URL" || { rm -rf "$tmp"; return 1; }
+  fi
+  tar -xzf "$tarball" -C "$tmp" || { rm -rf "$tmp"; return 1; }
+  [ -f "$tmp/koko" ] || { rm -rf "$tmp"; return 1; }
+  is_native_koko "$tmp/koko" || { rm -rf "$tmp"; return 1; }
+  cp -a "$tmp/koko" "$OUT/koko"
+  chmod +x "$OUT/koko"
+  if [ -d "$tmp/lib" ]; then
+    rm -rf "$OUT/lib"
+    cp -a "$tmp/lib" "$OUT/lib"
+  fi
+  rm -rf "$tmp"
+  log "koko from linux-bins release → $OUT/koko"
+  return 0
+}
+
 install_koko_cargo() {
   command -v cargo >/dev/null || return 1
   local staging="$CACHE_DIR/kokoros-src"
@@ -142,10 +171,11 @@ if [ -z "${SKIP_KOKO:-}" ]; then
     fi
     if install_koko_from_copy /usr/local/bin/koko \
       || install_koko_from_copy /opt/homebrew/bin/koko \
+      || install_koko_linux_prebuilt \
       || install_koko_cargo; then
       :
     else
-      die "koko not found — place binary at $OUT/koko, or install Rust (cargo) + $(opus_hint)"
+      die "koko not found — wait for GitHub release linux-bins, or cargo build ($(opus_hint))"
     fi
   fi
   install_koko_espeak

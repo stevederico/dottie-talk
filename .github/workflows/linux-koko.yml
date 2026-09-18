@@ -1,0 +1,36 @@
+name: linux-koko
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/build_linux_koko.sh"
+      - ".github/workflows/linux-koko.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config cmake clang \
+            libopus-dev libsonic-dev libpcaudio-dev patchelf
+      - name: Build and pack koko
+        run: bash scripts/build_linux_koko.sh
+      - name: Publish linux-bins release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete linux-bins --yes || true
+          git tag -f linux-bins
+          git push -f origin linux-bins
+          gh release create linux-bins dist/koko-linux-x86_64.tar.gz \
+            --title "Linux koko (prebuilt)" \
+            --notes "Native koko + bundled libsonic/pcaudio/opus. install_bins.sh downloads this. No sudo on the user machine."
