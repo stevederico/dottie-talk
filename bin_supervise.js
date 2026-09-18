@@ -368,7 +368,15 @@ export async function ensureBinsRunning() {
   startPromise = (async () => {
     try {
       await spawnStt();
-      await spawnTts();
+      try {
+        await spawnTts();
+      } catch (e) {
+        if (sttBackend() === 'voxtype') {
+          log(`TTS not ready (${e.message}) — HTTP still up, STT=voxtype`);
+        } else {
+          throw e;
+        }
+      }
       if (!healthTimer) {
         healthTimer = setInterval(() => {
           ensureBinsRunning().catch((e) => log(`health respawn: ${e.message}`));
