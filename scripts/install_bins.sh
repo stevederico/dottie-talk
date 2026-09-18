@@ -50,7 +50,7 @@ fi
 # ---- koko -------------------------------------------------------------------
 install_koko_from_copy() {
   local src="$1"
-  [ -x "$src" ] || return 1
+  is_native_koko "$src" || return 1
   cp -a "$src" "$OUT/koko"
   chmod +x "$OUT/koko"
   log "koko copied from $src"
@@ -84,8 +84,21 @@ install_koko_espeak() {
 opus_hint() {
   case "$(uname -s)" in
     Darwin) printf 'brew install pkg-config opus' ;;
-    Linux) printf 'pacman -S pkgconf opus  # or: apt install pkg-config libopus-dev' ;;
+    Linux) printf 'sudo pacman -S --needed libsonic pcaudiolib espeak-ng pkgconf opus cmake  # or: sudo apt install libsonic-dev libpcaudio-dev espeak-ng pkg-config libopus-dev cmake' ;;
     *) printf 'install pkg-config + opus' ;;
+  esac
+}
+
+# Repo ships a Darwin koko. Skip it on Linux (and skip ELF on macOS).
+is_native_koko() {
+  local f="$1"
+  [ -f "$f" ] || return 1
+  local mag
+  mag=$(od -An -N4 -tx1 "$f" 2>/dev/null | tr -d ' \n')
+  case "$(uname -s)" in
+    Linux)  [ "$mag" = "7f454c46" ] ;;
+    Darwin) [ "$mag" = "cfaedefe" ] || [ "$mag" = "feedfacf" ] || [ "$mag" = "cefaedfe" ] ;;
+    *) return 0 ;;
   esac
 }
 
@@ -102,7 +115,15 @@ install_koko_cargo() {
     git -C "$staging" fetch -q --depth 1 origin "$KOKOROS_REF" 2>/dev/null || true
     git -C "$staging" checkout -q FETCH_HEAD 2>/dev/null || git -C "$staging" pull -q --ff-only || true
   fi
-  log "cargo build --release (kokoros) — needs pkg-config + opus ($(opus_hint))"
+  if ! command -v cmake >/dev/null 2>&1; then
+    local mise_cmake
+    mise_cmake=$(echo "$HOME"/.local/share/mise/installs/cmake/*/cmake-*-linux-*/bin)
+    if [ -n "$mise_cmake" ] && [ -x "${mise_cmake%% *}/cmake" ]; then
+      PATH="${mise_cmake%% *}:$PATH"
+      log "cmake from mise: $(command -v cmake)"
+    fi
+  fi
+  log "cargo build --release (kokoros) — needs $(opus_hint)"
   (cd "$staging" && cargo build --release --bin koko)
   local built="$staging/target/release/koko"
   [ -x "$built" ] || return 1
@@ -113,9 +134,12 @@ install_koko_cargo() {
 }
 
 if [ -z "${SKIP_KOKO:-}" ]; then
-  if [ -x "$OUT/koko" ] && [ -z "${FORCE_REBUILD:-}" ]; then
+  if is_native_koko "$OUT/koko" && [ -z "${FORCE_REBUILD:-}" ]; then
     log "koko already at $OUT"
   else
+    if [ -f "$OUT/koko" ] && ! is_native_koko "$OUT/koko"; then
+      log "ignoring non-native koko at $OUT/koko — building for $(uname -s)"
+    fi
     if install_koko_from_copy /usr/local/bin/koko \
       || install_koko_from_copy /opt/homebrew/bin/koko \
       || install_koko_cargo; then
