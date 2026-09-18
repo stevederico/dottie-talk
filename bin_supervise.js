@@ -5,7 +5,7 @@
 
 import { spawn, execSync } from 'node:child_process';
 import {
-  createWriteStream, existsSync, statSync, statfsSync, mkdirSync,
+  createWriteStream, existsSync, readFileSync, statSync, statfsSync, mkdirSync,
   symlinkSync, lstatSync, unlinkSync, rmSync, readdirSync, renameSync,
 } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
@@ -316,17 +316,34 @@ async function spawnStt() {
   throw new Error('STT failed to become healthy');
 }
 
+function isNativeBin(p) {
+  if (!existsSync(p)) return false;
+  try {
+    const magic = readFileSync(p).subarray(0, 4);
+    if (process.platform === 'linux') {
+      return magic[0] === 0x7f && magic[1] === 0x45 && magic[2] === 0x4c && magic[3] === 0x46;
+    }
+    if (process.platform === 'darwin') {
+      return magic[0] === 0xcf && magic[1] === 0xfa;
+    }
+  } catch {
+    return false;
+  }
+  return true;
+}
+
 function resolveKokoBin() {
   const dir = binDir();
-  if (existsSync(path.join(dir, 'koko'))) return path.join(dir, 'koko');
+  const local = path.join(dir, 'koko');
+  if (isNativeBin(local)) return local;
   for (const p of ['/usr/local/bin/koko', '/opt/homebrew/bin/koko']) {
-    if (existsSync(p)) return p;
+    if (isNativeBin(p)) return p;
   }
   // Last resort: install script (may also fetch parakeet when needed).
   try {
     const installed = ensurePackageBinsInstalled();
     const bin = path.join(installed, 'koko');
-    if (existsSync(bin)) return bin;
+    if (isNativeBin(bin)) return bin;
   } catch { /* fall through */ }
   return null;
 }
