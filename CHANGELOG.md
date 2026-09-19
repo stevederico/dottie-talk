@@ -1,3 +1,7 @@
+0.6.2
+
+  Show both chords
+
 0.6.1
 
   List both keybinds

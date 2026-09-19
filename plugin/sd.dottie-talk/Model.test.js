@@ -32,6 +32,7 @@ describe('Model.js', () => {
   it('lists speak and dictate', () => {
     const text = ctx.keysDescription('SUPER + SHIFT + S', 'SUPER + SHIFT + V');
     assert.match(text, /Speak SUPER \+ SHIFT \+ S/);
-    assert.match(text, /Hold SUPER \+ SHIFT \+ V/);
+    assert.match(text, /Hold SUPER \+ SHIFT \+ V dictate/);
+    assert.match(text, /\n/);
   });
 });

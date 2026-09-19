@@ -16,8 +16,8 @@ BarWidget {
   property bool tts: false
   property bool keysEnabled: false
   property bool keysArmed: false
-  property string speakChord: ""
-  property string dictateChord: ""
+  property string speakChord: "SUPER + SHIFT + S"
+  property string dictateChord: "SUPER + SHIFT + V"
   property bool speakingFile: false
 
   readonly property string talkBin: Quickshell.env("HOME") + "/.local/bin/dottie-talk"
@@ -48,8 +48,8 @@ BarWidget {
     tts = next.tts
     keysEnabled = next.keysEnabled
     keysArmed = next.keysArmed
-    speakChord = next.speak
-    dictateChord = next.dictate
+    if (next.speak) speakChord = next.speak
+    if (next.dictate) dictateChord = next.dictate
     if (!next.running)
       popupOpen = false
   }
@@ -112,8 +112,8 @@ BarWidget {
     margin: Style.space(4)
     triggerMode: root.popupOpen ? "click" : "hover"
     open: root.popupOpen
-    contentWidth: popup.fittedContentWidth(Style.space(320))
-    contentHeight: popup.fittedContentHeight(column.implicitHeight)
+    contentWidth: popup.fittedContentWidth(Style.space(360))
+    contentHeight: popup.fittedContentHeight(Math.max(column.implicitHeight, Style.space(280)))
 
     Column {
       id: column
@@ -159,37 +159,29 @@ BarWidget {
       Toggle {
         width: parent.width
         label: "Keys"
-        description: root.keysArmed ? "Armed while Talk is running" : "Off until you toggle"
+        description: Model.keysDescription(root.speakChord, root.dictateChord)
         checked: root.keysEnabled
         foreground: root.bar.foreground
         fontFamily: root.bar.fontFamily
         onClicked: root.runTalk(["keys", root.keysEnabled ? "off" : "on"])
       }
 
-      Column {
+      Text {
         width: parent.width
-        spacing: Style.space(2)
-        visible: root.speakChord !== "" || root.dictateChord !== ""
+        text: "Speak  " + root.speakChord
+        color: root.bar.foreground
+        font.family: root.bar.fontFamily
+        font.pixelSize: Style.font.body
+        wrapMode: Text.WordWrap
+      }
 
-        Text {
-          visible: root.speakChord !== ""
-          width: parent.width
-          text: "Speak  " + root.speakChord
-          color: Qt.darker(root.bar.foreground, 1.4)
-          font.family: root.bar.fontFamily
-          font.pixelSize: Style.font.caption
-          wrapMode: Text.WordWrap
-        }
-
-        Text {
-          visible: root.dictateChord !== ""
-          width: parent.width
-          text: "Dictate  hold " + root.dictateChord
-          color: Qt.darker(root.bar.foreground, 1.4)
-          font.family: root.bar.fontFamily
-          font.pixelSize: Style.font.caption
-          wrapMode: Text.WordWrap
-        }
+      Text {
+        width: parent.width
+        text: "Dictate  hold " + root.dictateChord
+        color: root.bar.foreground
+        font.family: root.bar.fontFamily
+        font.pixelSize: Style.font.body
+        wrapMode: Text.WordWrap
       }
 
       Row {

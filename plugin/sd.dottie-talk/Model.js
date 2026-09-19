@@ -55,8 +55,7 @@ function statusLine(state) {
 }
 
 function keysDescription(speak, dictate) {
-  var bits = []
-  if (speak) bits.push("Speak " + speak)
-  if (dictate) bits.push("Hold " + dictate + " dictate")
-  return bits.join(" · ") || "Hotkeys while the server is up"
+  var s = speak || "SUPER + SHIFT + S"
+  var d = dictate || "SUPER + SHIFT + V"
+  return "Speak " + s + "\nHold " + d + " dictate"
 }
