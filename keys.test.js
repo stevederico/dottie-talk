@@ -180,4 +180,26 @@ describe('dictate', () => {
     });
     assert.equal(r.ok, true);
   });
+
+  it('starts and stops voxtype for push-to-talk', async () => {
+    restore = isolate();
+    saveConfig({ keys: { enabled: true } });
+    const start = await dictate({
+      mode: 'start',
+      execFileFn: async (cmd, args) => {
+        assert.equal(cmd, 'voxtype');
+        assert.deepEqual(args, ['record', 'start']);
+        return { stdout: '' };
+      },
+    });
+    assert.equal(start.mode, 'start');
+    const stop = await dictate({
+      mode: 'stop',
+      execFileFn: async (cmd, args) => {
+        assert.deepEqual(args, ['record', 'stop']);
+        return { stdout: '' };
+      },
+    });
+    assert.equal(stop.mode, 'stop');
+  });
 });

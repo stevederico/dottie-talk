@@ -17,6 +17,7 @@ BarWidget {
   property bool keysEnabled: false
   property bool keysArmed: false
   property string speakChord: ""
+  property string dictateChord: ""
   property bool speakingFile: false
 
   readonly property string talkBin: Quickshell.env("HOME") + "/.local/bin/dottie-talk"
@@ -48,6 +49,7 @@ BarWidget {
     keysEnabled = next.keysEnabled
     keysArmed = next.keysArmed
     speakChord = next.speak
+    dictateChord = next.dictate
     if (!next.running)
       popupOpen = false
   }
@@ -157,7 +159,7 @@ BarWidget {
       Toggle {
         width: parent.width
         label: "Keys"
-        description: root.speakChord !== "" ? ("Speak " + root.speakChord) : "Hotkeys while the server is up"
+        description: [root.speakChord !== "" ? ("Speak " + root.speakChord) : "", root.dictateChord !== "" ? ("Hold " + root.dictateChord + " dictate") : ""].filter(function(s) { return s !== "" }).join(" · ") || "Hotkeys while the server is up"
         checked: root.keysEnabled
         foreground: root.bar.foreground
         fontFamily: root.bar.fontFamily

@@ -11,7 +11,7 @@ export const DEFAULT_KEYS = Object.freeze({
   enabled: false,
   speak: 'SUPER + SHIFT + S',
   stop: 'ESCAPE',
-  dictate: '',
+  dictate: 'SUPER + SHIFT + V',
   voice: '',
 });
 
@@ -67,6 +67,9 @@ export function saveConfig(cfg) {
 export function setKeysEnabled(enabled) {
   const current = loadConfig();
   current.keys.enabled = Boolean(enabled);
+  if (!current.keys.speak) current.keys.speak = DEFAULT_KEYS.speak;
+  if (!current.keys.stop) current.keys.stop = DEFAULT_KEYS.stop;
+  if (!current.keys.dictate) current.keys.dictate = DEFAULT_KEYS.dictate;
   const file = configPath();
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify({ keys: current.keys }, null, 2)}\n`);

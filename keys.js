@@ -185,15 +185,16 @@ export async function speakSelection({
   return { text };
 }
 
-export async function dictate({ execFileFn = execFileAsync } = {}) {
+export async function dictate({ execFileFn = execFileAsync, mode = 'toggle' } = {}) {
   const status = keysStatus();
   if (isHotkeyInvoke()) {
     if (!status.enabled) return { skipped: 'disabled' };
     if (!status.armed) return { skipped: 'server-down' };
   }
+  const verb = mode === 'start' || mode === 'stop' ? mode : 'toggle';
   try {
-    await execFileFn('voxtype', ['record', 'toggle'], { timeout: 5000, encoding: 'utf8' });
-    return { ok: true };
+    await execFileFn('voxtype', ['record', verb], { timeout: 5000, encoding: 'utf8' });
+    return { ok: true, mode: verb };
   } catch (err) {
     const msg = err && err.message ? String(err.message) : String(err);
     if (/ENOENT|not found/i.test(msg) || err.code === 'ENOENT') {

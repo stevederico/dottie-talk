@@ -1,3 +1,8 @@
+0.6.0
+
+  Add dictate key
+  Hold Super+Shift+V
+
 0.5.1
 
   Fetch Linux koko

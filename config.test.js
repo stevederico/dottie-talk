@@ -29,7 +29,7 @@ describe('loadConfig', () => {
     const cfg = loadConfig();
     assert.equal(cfg.keys.enabled, false);
     assert.equal(cfg.keys.speak, DEFAULT_KEYS.speak);
-    assert.equal(cfg.keys.dictate, '');
+    assert.equal(cfg.keys.dictate, DEFAULT_KEYS.dictate);
   });
 
   it('reads enabled from file', () => {
@@ -55,7 +55,8 @@ describe('loadConfig', () => {
 
   it('does not steal Omarchy Display or voxtype', () => {
     restore = isolate();
-    assert.equal(DEFAULT_KEYS.dictate, '');
+    assert.notEqual(DEFAULT_KEYS.dictate, 'SUPER + CTRL + D');
+    assert.notEqual(DEFAULT_KEYS.dictate, 'SUPER + CTRL + X');
     assert.notEqual(DEFAULT_KEYS.speak, 'SUPER + CTRL + D');
   });
 
@@ -75,5 +76,12 @@ describe('setKeysEnabled', () => {
     const cfg = setKeysEnabled(true);
     assert.equal(cfg.keys.enabled, true);
     assert.equal(loadConfig().keys.enabled, true);
+  });
+
+  it('fills empty dictate on enable', () => {
+    restore = isolate();
+    saveConfig({ keys: { enabled: false, dictate: '' } });
+    const cfg = setKeysEnabled(true);
+    assert.equal(cfg.keys.dictate, DEFAULT_KEYS.dictate);
   });
 });
