@@ -50,10 +50,12 @@ fi
 # ---- koko -------------------------------------------------------------------
 install_koko_from_copy() {
   local src="$1"
+  local dest
+  dest=$(koko_dest)
   is_native_koko "$src" || return 1
-  cp -a "$src" "$OUT/koko"
-  chmod +x "$OUT/koko"
-  log "koko copied from $src"
+  cp -a "$src" "$dest"
+  chmod +x "$dest"
+  log "koko copied from $src → $dest"
   return 0
 }
 
@@ -103,12 +105,21 @@ is_native_koko() {
 }
 
 # Prebuilt Linux koko + bundled .so (no pacman). GitHub Actions publishes linux-bins.
+# Linux writes koko-linux-x86_64 so git's Darwin bin/koko stays put.
 KOKO_LINUX_URL="${KOKO_LINUX_URL:-https://github.com/stevederico/dottie-talk/releases/download/linux-bins/koko-linux-x86_64.tar.gz}"
+
+koko_dest() {
+  case "$(uname -s)" in
+    Linux) printf '%s\n' "$OUT/koko-linux-x86_64" ;;
+    *) printf '%s\n' "$OUT/koko" ;;
+  esac
+}
 
 install_koko_linux_prebuilt() {
   [ "$(uname -s)" = "Linux" ] || return 1
   command -v curl >/dev/null || command -v wget >/dev/null || return 1
-  local tmp tarball
+  local tmp tarball dest
+  dest=$(koko_dest)
   tmp=$(mktemp -d)
   tarball="$tmp/koko-linux-x86_64.tar.gz"
   log "download $KOKO_LINUX_URL"
@@ -120,14 +131,14 @@ install_koko_linux_prebuilt() {
   tar -xzf "$tarball" -C "$tmp" || { rm -rf "$tmp"; return 1; }
   [ -f "$tmp/koko" ] || { rm -rf "$tmp"; return 1; }
   is_native_koko "$tmp/koko" || { rm -rf "$tmp"; return 1; }
-  cp -a "$tmp/koko" "$OUT/koko"
-  chmod +x "$OUT/koko"
+  cp -a "$tmp/koko" "$dest"
+  chmod +x "$dest"
   if [ -d "$tmp/lib" ]; then
     rm -rf "$OUT/lib"
     cp -a "$tmp/lib" "$OUT/lib"
   fi
   rm -rf "$tmp"
-  log "koko from linux-bins release → $OUT/koko"
+  log "koko from linux-bins release → $dest"
   return 0
 }
 
@@ -156,18 +167,21 @@ install_koko_cargo() {
   (cd "$staging" && cargo build --release --bin koko)
   local built="$staging/target/release/koko"
   [ -x "$built" ] || return 1
-  cp -a "$built" "$OUT/koko"
-  chmod +x "$OUT/koko"
-  log "koko built → $OUT/koko"
+  local dest
+  dest=$(koko_dest)
+  cp -a "$built" "$dest"
+  chmod +x "$dest"
+  log "koko built → $dest"
   return 0
 }
 
 if [ -z "${SKIP_KOKO:-}" ]; then
-  if is_native_koko "$OUT/koko" && [ -z "${FORCE_REBUILD:-}" ]; then
-    log "koko already at $OUT"
+  DEST=$(koko_dest)
+  if is_native_koko "$DEST" && [ -z "${FORCE_REBUILD:-}" ]; then
+    log "koko already at $DEST"
   else
     if [ -f "$OUT/koko" ] && ! is_native_koko "$OUT/koko"; then
-      log "ignoring non-native koko at $OUT/koko — building for $(uname -s)"
+      log "ignoring non-native koko at $OUT/koko — installing for $(uname -s)"
     fi
     if install_koko_from_copy /usr/local/bin/koko \
       || install_koko_from_copy /opt/homebrew/bin/koko \
@@ -182,4 +196,4 @@ if [ -z "${SKIP_KOKO:-}" ]; then
 fi
 
 log "done. $OUT"
-ls -lh "$OUT/parakeet-server" "$OUT/koko" 2>/dev/null || ls -lh "$OUT/koko" 2>/dev/null || true
+ls -lh "$OUT/parakeet-server" "$OUT/koko" "$OUT/koko-linux-x86_64" 2>/dev/null || ls -lh "$(koko_dest)" 2>/dev/null || true

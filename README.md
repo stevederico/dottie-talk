@@ -14,7 +14,7 @@ Bins ship in `bin/` (macOS). Models download on first boot (`~/.cache/parakeet.c
 | Platform | STT | TTS |
 |---|---|---|
 | Apple Silicon (darwin) | `parakeet-server` `:1315` (bundled) | `koko` `:1314` |
-| Omarchy / Linux | system `voxtype` CLI | `koko` `:1314` (build via `npm run install:bins`) |
+| Omarchy / Linux | system `voxtype` CLI | `koko` `:1314` (ELF fetched on first start as `bin/koko-linux-x86_64`) |
 
 | Command | What |
 |---|---|
@@ -38,7 +38,7 @@ npx transcribe hello.wav
 
 Node ≥22. Override STT with `DOTTIE_STT=voxtype` or `DOTTIE_STT=parakeet`.
 
-Linux: install Voxtype first (Omarchy: Install → AI → Dictation, or `voxtype-bin`). Streaming/multipart STT needs parakeet — buffered JSON `/v1/audio/transcriptions` works on both.
+Linux: install Voxtype first (Omarchy: Install → AI → Dictation, or `voxtype-bin`). `npm start` skips the Darwin `bin/koko` and downloads the linux-bins ELF (no sudo). Streaming/multipart STT needs parakeet — buffered JSON `/v1/audio/transcriptions` works on both.
 
 ## Keys (Linux)
 

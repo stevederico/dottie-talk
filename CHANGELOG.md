@@ -1,3 +1,8 @@
+0.5.1
+
+  Fetch Linux koko
+  Keep Darwin binary
+
 0.5.0
 
   Add Omarchy bar

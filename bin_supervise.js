@@ -39,8 +39,33 @@ function needsParakeetBin() {
   return sttBackend() === 'parakeet';
 }
 
-function dirHasRequiredBins(dir) {
-  if (!existsSync(path.join(dir, 'koko'))) return false;
+/** ELF on Linux, Mach-O on macOS. Darwin koko in bin/ is not a Linux TTS. */
+export function isNativeBin(p) {
+  if (!existsSync(p)) return false;
+  try {
+    const magic = readFileSync(p).subarray(0, 4);
+    if (process.platform === 'linux') {
+      return magic[0] === 0x7f && magic[1] === 0x45 && magic[2] === 0x4c && magic[3] === 0x46;
+    }
+    if (process.platform === 'darwin') {
+      return magic[0] === 0xcf && magic[1] === 0xfa;
+    }
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+/** Linux keeps Darwin `koko` in git and fetches `koko-linux-x86_64` on first start. */
+export function kokoCandidates(dir) {
+  if (process.platform === 'linux') {
+    return [path.join(dir, 'koko-linux-x86_64'), path.join(dir, 'koko')];
+  }
+  return [path.join(dir, 'koko')];
+}
+
+export function dirHasRequiredBins(dir) {
+  if (!kokoCandidates(dir).some(isNativeBin)) return false;
   if (needsParakeetBin() && !existsSync(path.join(dir, 'parakeet-server'))) return false;
   return true;
 }
@@ -316,34 +341,19 @@ async function spawnStt() {
   throw new Error('STT failed to become healthy');
 }
 
-function isNativeBin(p) {
-  if (!existsSync(p)) return false;
-  try {
-    const magic = readFileSync(p).subarray(0, 4);
-    if (process.platform === 'linux') {
-      return magic[0] === 0x7f && magic[1] === 0x45 && magic[2] === 0x4c && magic[3] === 0x46;
-    }
-    if (process.platform === 'darwin') {
-      return magic[0] === 0xcf && magic[1] === 0xfa;
-    }
-  } catch {
-    return false;
-  }
-  return true;
-}
-
 function resolveKokoBin() {
   const dir = binDir();
-  const local = path.join(dir, 'koko');
-  if (isNativeBin(local)) return local;
+  for (const p of kokoCandidates(dir)) {
+    if (isNativeBin(p)) return p;
+  }
   for (const p of ['/usr/local/bin/koko', '/opt/homebrew/bin/koko']) {
     if (isNativeBin(p)) return p;
   }
-  // Last resort: install script (may also fetch parakeet when needed).
   try {
     const installed = ensurePackageBinsInstalled();
-    const bin = path.join(installed, 'koko');
-    if (isNativeBin(bin)) return bin;
+    for (const p of kokoCandidates(installed)) {
+      if (isNativeBin(p)) return p;
+    }
   } catch { /* fall through */ }
   return null;
 }
