@@ -53,3 +53,10 @@ function statusLine(state) {
   if (state.keysArmed) bits.push("keys")
   return bits.join(" · ")
 }
+
+function keysDescription(speak, dictate) {
+  var bits = []
+  if (speak) bits.push("Speak " + speak)
+  if (dictate) bits.push("Hold " + dictate + " dictate")
+  return bits.join(" · ") || "Hotkeys while the server is up"
+}

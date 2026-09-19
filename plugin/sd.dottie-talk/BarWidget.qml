@@ -159,11 +159,37 @@ BarWidget {
       Toggle {
         width: parent.width
         label: "Keys"
-        description: [root.speakChord !== "" ? ("Speak " + root.speakChord) : "", root.dictateChord !== "" ? ("Hold " + root.dictateChord + " dictate") : ""].filter(function(s) { return s !== "" }).join(" · ") || "Hotkeys while the server is up"
+        description: root.keysArmed ? "Armed while Talk is running" : "Off until you toggle"
         checked: root.keysEnabled
         foreground: root.bar.foreground
         fontFamily: root.bar.fontFamily
         onClicked: root.runTalk(["keys", root.keysEnabled ? "off" : "on"])
+      }
+
+      Column {
+        width: parent.width
+        spacing: Style.space(2)
+        visible: root.speakChord !== "" || root.dictateChord !== ""
+
+        Text {
+          visible: root.speakChord !== ""
+          width: parent.width
+          text: "Speak  " + root.speakChord
+          color: Qt.darker(root.bar.foreground, 1.4)
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.WordWrap
+        }
+
+        Text {
+          visible: root.dictateChord !== ""
+          width: parent.width
+          text: "Dictate  hold " + root.dictateChord
+          color: Qt.darker(root.bar.foreground, 1.4)
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.WordWrap
+        }
       }
 
       Row {

@@ -1,3 +1,7 @@
+0.6.1
+
+  List both keybinds
+
 0.6.0
 
   Add dictate key

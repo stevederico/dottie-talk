@@ -28,4 +28,10 @@ describe('Model.js', () => {
     assert.equal(ctx.statusLabel(on), 'On');
     assert.match(ctx.statusLine(on), /keys/);
   });
+
+  it('lists speak and dictate', () => {
+    const text = ctx.keysDescription('SUPER + SHIFT + S', 'SUPER + SHIFT + V');
+    assert.match(text, /Speak SUPER \+ SHIFT \+ S/);
+    assert.match(text, /Hold SUPER \+ SHIFT \+ V/);
+  });
 });
