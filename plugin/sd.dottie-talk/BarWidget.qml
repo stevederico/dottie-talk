@@ -19,14 +19,17 @@ BarWidget {
   property string speakChord: "SUPER + SHIFT + S"
   property string dictateChord: "SUPER + SHIFT + V"
   property bool speakingFile: false
+  property bool processingFile: false
 
   readonly property string talkBin: Quickshell.env("HOME") + "/.local/bin/dottie-talk"
   readonly property string statePath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/dottie-talk/state"
   readonly property string speakActivePath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/speak.active"
+  readonly property string processingPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/dottie-talk/processing"
   readonly property bool speaking: root.status === "speaking" || root.speakingFile
+  readonly property bool busy: root.status === "processing" || root.processingFile
   readonly property var snapshot: ({
     running: root.running,
-    status: root.speaking ? "speaking" : root.status,
+    status: root.busy ? "processing" : (root.speaking ? "speaking" : root.status),
     stt: root.stt,
     tts: root.tts,
     keysArmed: root.keysArmed
@@ -35,7 +38,7 @@ BarWidget {
   readonly property string statusIcon: Model.statusIcon(root.snapshot)
   readonly property string statusLine: Model.statusLine(root.snapshot)
 
-  implicitWidth: root.running ? button.implicitWidth : 0
+  implicitWidth: root.running ? Math.max(button.implicitWidth, barSize) : 0
   implicitHeight: root.running ? barSize : 0
   visible: root.running
   clip: true
@@ -87,6 +90,15 @@ BarWidget {
     onLoadFailed: root.speakingFile = false
   }
 
+  FileView {
+    path: root.processingPath
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.processingFile = true
+    onLoadFailed: root.processingFile = false
+  }
+
   Timer {
     interval: root.running ? 400 : 2000
     running: true
@@ -98,10 +110,35 @@ BarWidget {
     id: button
     anchors.centerIn: parent
     bar: root.bar
+    opacity: root.busy ? 0 : 1
     text: root.statusIcon
     active: root.speaking
     tooltipText: root.running ? (root.statusLine + " · click for menu") : "Talk off"
     onPressed: function(b) { root.handlePress(b) }
+  }
+
+  Text {
+    visible: root.busy
+    anchors.centerIn: parent
+    text: "󰔟"
+    color: root.bar ? root.bar.barForeground : "#ddd"
+    font.family: root.bar ? root.bar.fontFamily : ""
+    font.pixelSize: Style.font.icon
+    transformOrigin: Item.Center
+    RotationAnimation on rotation {
+      running: root.busy
+      loops: Animation.Infinite
+      from: 0
+      to: 360
+      duration: 800
+    }
+  }
+
+  MouseArea {
+    visible: root.busy
+    anchors.fill: parent
+    acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+    onPressed: function(mouse) { root.handlePress(mouse.button) }
   }
 
   PopupCard {

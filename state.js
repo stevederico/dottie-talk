@@ -6,7 +6,7 @@
 import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { isSpeaking, keysStatus } from './keys.js';
+import { isProcessing, isSpeaking, keysStatus } from './keys.js';
 import { PORTS } from './ports.js';
 
 export function talkDir() {
@@ -28,7 +28,7 @@ export function buildTalkState(bins = {}, extra = {}) {
     running: true,
     pid: process.pid,
     port: PORTS.TALK_HTTP_PORT,
-    status: speaking ? 'speaking' : 'idle',
+    status: isProcessing() ? 'processing' : speaking ? 'speaking' : 'idle',
     stt: Boolean(bins.stt),
     tts: Boolean(bins.tts),
     ok: Boolean(bins.ok),
@@ -62,7 +62,9 @@ export function parseTalkState(raw) {
     return {
       running,
       pid: Number(parsed.pid) || 0,
-      status: running ? (parsed.status === 'speaking' ? 'speaking' : 'idle') : 'off',
+      status: running
+        ? (parsed.status === 'speaking' || parsed.status === 'processing' ? parsed.status : 'idle')
+        : 'off',
       stt: parsed.stt === true,
       tts: parsed.tts === true,
       ok: parsed.ok === true,

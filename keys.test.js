@@ -4,10 +4,13 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  clearProcessing,
   clearSpeaking,
   dictate,
+  isProcessing,
   isUrlOnly,
   keysStatus,
+  markProcessing,
   markSpeaking,
   pickText,
   readSelection,
@@ -162,6 +165,19 @@ describe('speakSelection', () => {
     assert.equal(r.text, 'hello there');
     assert.equal(r.pid, 9);
     clearSpeaking();
+  });
+});
+
+describe('processing flag', () => {
+  let restore;
+  afterEach(() => restore?.());
+
+  it('marks and clears', () => {
+    restore = isolate();
+    markProcessing();
+    assert.equal(isProcessing(), true);
+    clearProcessing();
+    assert.equal(isProcessing(), false);
   });
 });
 

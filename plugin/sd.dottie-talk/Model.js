@@ -19,7 +19,9 @@ function parseState(raw) {
     return {
       running: running,
       pid: typeof parsed.pid === "number" ? parsed.pid : 0,
-      status: running ? (parsed.status === "speaking" ? "speaking" : "idle") : "off",
+      status: running
+        ? (parsed.status === "speaking" || parsed.status === "processing" ? parsed.status : "idle")
+        : "off",
       stt: parsed.stt === true,
       tts: parsed.tts === true,
       ok: parsed.ok === true,
@@ -36,12 +38,14 @@ function parseState(raw) {
 
 function statusLabel(state) {
   if (!state.running) return "Off"
+  if (state.status === "processing") return "Working"
   if (state.status === "speaking") return "Speaking"
   return "On"
 }
 
 function statusIcon(state) {
   if (!state.running) return "󰝛"
+  if (state.status === "processing") return "󰔟"
   if (state.status === "speaking") return "󰝚"
   return "󰔊"
 }

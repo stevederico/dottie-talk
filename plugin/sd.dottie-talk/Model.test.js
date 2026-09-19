@@ -29,6 +29,15 @@ describe('Model.js', () => {
     assert.match(ctx.statusLine(on), /keys/);
   });
 
+  it('labels processing', () => {
+    const busy = ctx.parseState(JSON.stringify({
+      running: true,
+      pid: 3,
+      status: 'processing',
+    }));
+    assert.equal(ctx.statusLabel(busy), 'Working');
+  });
+
   it('lists speak and dictate', () => {
     const text = ctx.keysDescription('SUPER + SHIFT + S', 'SUPER + SHIFT + V');
     assert.match(text, /Speak SUPER \+ SHIFT \+ S/);

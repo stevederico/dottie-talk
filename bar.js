@@ -29,13 +29,19 @@ export function talkBinPath() {
     || path.join(os.homedir(), '.local', 'bin', 'dottie-talk');
 }
 
+export function speakBinPath() {
+  return process.env.DOTTIE_TALK_SPEAK_BIN
+    || path.join(path.dirname(talkBinPath()), 'speak');
+}
+
 export function shellConfigPath() {
   return process.env.DOTTIE_TALK_SHELL_JSON
     || path.join(os.homedir(), '.config', 'omarchy', 'shell.json');
 }
 
-export function talkBinScript() {
-  return `#!/bin/sh\n${MARKER}\nexec ${shellQuote(process.execPath)} ${shellQuote(CLI)} "$@"\n`;
+export function talkBinScript(subcommand) {
+  const rest = subcommand ? `${subcommand} "$@"` : '"$@"';
+  return `#!/bin/sh\n${MARKER}\nexec ${shellQuote(process.execPath)} ${shellQuote(CLI)} ${rest}\n`;
 }
 
 function shellQuote(value) {
@@ -76,8 +82,7 @@ function loadShell() {
   }
 }
 
-export function writeTalkBin() {
-  const dest = talkBinPath();
+function writeCliWrapper(dest, subcommand) {
   mkdirSync(path.dirname(dest), { recursive: true });
   if (existsSync(dest)) {
     try {
@@ -85,9 +90,14 @@ export function writeTalkBin() {
       if (!body.includes(MARKER)) return dest;
     } catch { /* replace ours */ }
   }
-  writeFileSync(dest, talkBinScript());
+  writeFileSync(dest, talkBinScript(subcommand));
   chmodSync(dest, 0o755);
   return dest;
+}
+
+export function writeTalkBin() {
+  writeCliWrapper(speakBinPath(), 'speak');
+  return writeCliWrapper(talkBinPath());
 }
 
 export function linkPlugin() {

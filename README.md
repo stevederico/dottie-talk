@@ -33,6 +33,7 @@ Bins ship in `bin/` (macOS). Models download on first boot (`~/.cache/parakeet.c
 
 ```bash
 npx speak "hello" -o hello.wav
+speak "hello" -o hello.wav   # after dottie-talk bar on (~/.local/bin/speak)
 npx transcribe hello.wav
 ```
 

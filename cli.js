@@ -91,8 +91,15 @@ async function cmdSpeak({ text, out, voice }) {
     process.stderr.write('usage: speak <text> [-o out.wav]\n');
     process.exit(1);
   }
-  await ensureBinsRunning();
-  const result = await speak({ text, voice: voice || undefined });
+  const { markProcessing, clearProcessing } = await import('./keys.js');
+  markProcessing();
+  let result;
+  try {
+    await ensureBinsRunning();
+    result = await speak({ text, voice: voice || undefined });
+  } finally {
+    clearProcessing();
+  }
   if (result.error) {
     process.stderr.write(`${result.error}\n`);
     process.exit(1);

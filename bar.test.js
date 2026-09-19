@@ -34,6 +34,7 @@ describe('talkBinScript', () => {
     assert.match(sh, /^#!\/bin\/sh/);
     assert.match(sh, /dottie-talk/);
     assert.match(sh, /cli\.js/);
+    assert.match(talkBinScript('speak'), /cli\.js' speak /);
   });
 });
 

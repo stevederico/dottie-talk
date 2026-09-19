@@ -60,6 +60,11 @@ describe('parseTalkState', () => {
     assert.equal(s.keysArmed, true);
     assert.equal(s.speak, 'SUPER + SHIFT + S');
   });
+
+  it('keeps processing status', () => {
+    const s = parseTalkState(JSON.stringify({ running: true, pid: 2, status: 'processing' }));
+    assert.equal(s.status, 'processing');
+  });
 });
 
 describe('writeTalkState', () => {

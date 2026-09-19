@@ -9,7 +9,7 @@ import { pathToFileURL } from 'node:url';
 import { PORTS } from './ports.js';
 import { ensureBinsRunning, binsHealth, stopBins, sttBackend } from './bin_supervise.js';
 import { transcribe, speak } from './core.js';
-import { keysStatus } from './keys.js';
+import { clearProcessing, keysStatus, markProcessing } from './keys.js';
 import { armKeys, disarmKeys } from './keys_hypr.js';
 import { buildTalkState, clearTalkState, writeTalkPid, writeTalkState } from './state.js';
 
@@ -110,7 +110,13 @@ export async function handleTalkRequest(req, res) {
       const chunks = [];
       for await (const c of req) chunks.push(c);
       const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
-      const result = await speak({ text: body.input ?? body.text ?? '', voice: body.voice });
+      markProcessing();
+      let result;
+      try {
+        result = await speak({ text: body.input ?? body.text ?? '', voice: body.voice });
+      } finally {
+        clearProcessing();
+      }
       if (result.error) {
         res.writeHead(502, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: result.error }));

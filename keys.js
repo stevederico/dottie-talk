@@ -41,6 +41,23 @@ export function speakPidPath() {
   return path.join(dir, 'speak.pid');
 }
 
+export function processingPath() {
+  return path.join(runtimeDir(), 'dottie-talk', 'processing');
+}
+
+export function markProcessing() {
+  mkdirSync(path.dirname(processingPath()), { recursive: true });
+  writeFileSync(processingPath(), `${process.pid}\n`);
+}
+
+export function clearProcessing() {
+  try { unlinkSync(processingPath()); } catch { /* ok */ }
+}
+
+export function isProcessing() {
+  return existsSync(processingPath());
+}
+
 export function isUrlOnly(text) {
   return /^https?:\/\/\S+$/i.test(String(text || '').trim());
 }
@@ -126,6 +143,7 @@ export function markSpeaking(pid) {
 export function clearSpeaking() {
   try { unlinkSync(speakActivePath()); } catch { /* ok */ }
   try { unlinkSync(speakPidPath()); } catch { /* ok */ }
+  clearProcessing();
 }
 
 export function isSpeaking() {
@@ -170,30 +188,35 @@ export async function speakSelection({
     return { empty: true };
   }
 
-  await ensureTtsFn();
-  const result = await speakFn({ text, voice: status.voice || undefined });
-  if (result.error) {
-    notifyFn(result.error);
-    return { error: result.error };
-  }
+  markProcessing();
+  try {
+    await ensureTtsFn();
+    const result = await speakFn({ text, voice: status.voice || undefined });
+    if (result.error) {
+      notifyFn(result.error);
+      return { error: result.error };
+    }
 
-  const dir = path.join(tmpdir(), 'dottie-talk-keys');
-  mkdirSync(dir, { recursive: true });
-  const wavPath = path.join(dir, 'speech.wav');
-  writeFileSync(wavPath, Buffer.from(result.audioBase64, 'base64'));
+    const dir = path.join(tmpdir(), 'dottie-talk-keys');
+    mkdirSync(dir, { recursive: true });
+    const wavPath = path.join(dir, 'speech.wav');
+    writeFileSync(wavPath, Buffer.from(result.audioBase64, 'base64'));
 
-  const bin = whichPlayer(whichFn);
-  if (!bin) {
-    const error = 'no audio player (pw-play, paplay, mpv, ffplay)';
-    notifyFn(error);
-    return { error };
+    const bin = whichPlayer(whichFn);
+    if (!bin) {
+      const error = 'no audio player (pw-play, paplay, mpv, ffplay)';
+      notifyFn(error);
+      return { error };
+    }
+    const args = playerCommands(wavPath).find((c) => c[0] === bin).slice(1);
+    const child = spawnFn(bin, args, { stdio: 'ignore', detached: true });
+    child.unref?.();
+    markSpeaking(child.pid);
+    child.on?.('exit', () => clearSpeaking());
+    return { text, pid: child.pid };
+  } finally {
+    clearProcessing();
   }
-  const args = playerCommands(wavPath).find((c) => c[0] === bin).slice(1);
-  const child = spawnFn(bin, args, { stdio: 'ignore', detached: true });
-  child.unref?.();
-  markSpeaking(child.pid);
-  child.on?.('exit', () => clearSpeaking());
-  return { text, pid: child.pid };
 }
 
 export async function dictate({ execFileFn = execFileAsync, mode = 'toggle', notifyFn = notifyTalk } = {}) {

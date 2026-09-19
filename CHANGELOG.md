@@ -1,3 +1,7 @@
+0.7.0
+
+  Spin bar while TTS
+
 0.6.3
 
   Fix dead hotkeys

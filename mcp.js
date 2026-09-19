@@ -12,6 +12,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { transcribe, speak } from './core.js';
 import { ensureBinsRunning } from './bin_supervise.js';
+import { clearProcessing, markProcessing } from './keys.js';
 
 export const TALK_TOOLS = [
   {
@@ -62,7 +63,13 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   }
 
   if (name === 'speak') {
-    const result = await speak({ text: args.text, voice: args.voice });
+    markProcessing();
+    let result;
+    try {
+      result = await speak({ text: args.text, voice: args.voice });
+    } finally {
+      clearProcessing();
+    }
     if (result.error) {
       return { content: [{ type: 'text', text: result.error }], isError: true };
     }
