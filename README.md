@@ -28,6 +28,8 @@ Bins ship in `bin/` (macOS). Models download on first boot (`~/.cache/parakeet.c
 | `dottie-talk keys on` | enable talk-keys-style hotkeys (off by default) |
 | `dottie-talk keys off` | disable hotkeys |
 | `dottie-talk keys status` | enabled / armed / chords |
+| `dottie-talk bar on` | Omarchy menubar icon (hidden until `start`) |
+| `dottie-talk stop` | stop the HTTP server |
 
 ```bash
 npx speak "hello" -o hello.wav
@@ -68,6 +70,17 @@ Config: `~/.config/dottie-talk/config.json`
 ```
 
 `DOTTIE_TALK_KEYS=on` / `off` overrides `enabled`. Hotkeys no-op when the HTTP server is down. macOS: use [talk-keys](https://github.com/stevederico/talk-keys).
+
+## Bar (Omarchy)
+
+Menubar icon **only while `npm start` is running**. Click: keys toggle, speak selection, stop, quit. Middle-click quits.
+
+```bash
+dottie-talk bar on
+dottie-talk start
+```
+
+`start` on Linux also installs the plugin (`sd.dottie-talk`) next to Dottie if the bar does not already have it.
 
 ## Related
 

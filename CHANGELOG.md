@@ -1,3 +1,8 @@
+0.5.0
+
+  Add Omarchy bar
+  Hide unless running
+
 0.4.1
 
   Drop Display conflict

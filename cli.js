@@ -30,12 +30,15 @@ Usage:
   dottie-talk start
   dottie-talk health
   dottie-talk keys [on|off|status|speak|stop|dictate]
+  dottie-talk bar [on|off|status]
+  dottie-talk stop
   dottie-talk help
 
 speak writes WAV to -o, or stdout when piped, else ./speech.wav.
 transcribe prints text to stdout.
 start runs the HTTP façade on :${PORTS.TALK_HTTP_PORT}.
 keys is off by default. on installs Hyprland binds; they arm while start is running.
+stop ends the HTTP server. bar on puts the Omarchy menubar icon (visible while start is running).
 `;
   process.stderr.write(text);
   process.exit(code);
@@ -43,7 +46,7 @@ keys is off by default. on installs Hyprland binds; they arm while start is runn
 
 /**
  * @param {string[]} argv
- * @returns {{ cmd: string, text: string, file: string, out: string, voice: string, keysAction: string }}
+ * @returns {{ cmd: string, text: string, file: string, out: string, voice: string, keysAction: string, barAction: string }}
  */
 export function parseArgs(argv) {
   const bin = path.basename(argv[1] || '').replace(/\.js$/, '');
@@ -76,6 +79,7 @@ export function parseArgs(argv) {
     text: cmd === 'speak' ? positionals.join(' ') : '',
     file: cmd === 'transcribe' ? (positionals[0] || '') : '',
     keysAction: cmd === 'keys' ? (positionals[0] || 'status') : '',
+    barAction: cmd === 'bar' ? (positionals[0] || 'status') : '',
     out,
     voice,
   };
@@ -136,6 +140,34 @@ async function cmdKeys(action) {
   if (result && result.error) process.exit(1);
 }
 
+async function cmdStop() {
+  const { stopTalkServer } = await import('./state.js');
+  const result = stopTalkServer();
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (!result.stopped) process.exit(1);
+}
+
+async function cmdBar(action) {
+  const { installBar, uninstallBar, barHasWidget, shellConfigPath } = await import('./bar.js');
+  const { readFileSync, existsSync } = await import('node:fs');
+  if (action === 'on' || action === 'enable') {
+    const result = await installBar();
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+  if (action === 'off' || action === 'disable') {
+    const result = await uninstallBar();
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+  let onBar = false;
+  const file = shellConfigPath();
+  if (existsSync(file)) {
+    try { onBar = barHasWidget(JSON.parse(readFileSync(file, 'utf8'))); } catch { /* ok */ }
+  }
+  process.stdout.write(`${JSON.stringify({ id: 'sd.dottie-talk', onBar }, null, 2)}\n`);
+}
+
 function cmdStart() {
   const httpJs = path.join(__dirname, 'http.js');
   const child = spawn(process.execPath, [httpJs], {
@@ -167,6 +199,12 @@ async function main() {
       break;
     case 'keys':
       await cmdKeys(opts.keysAction);
+      break;
+    case 'stop':
+      await cmdStop();
+      break;
+    case 'bar':
+      await cmdBar(opts.barAction);
       break;
     case 'help':
     case '-h':

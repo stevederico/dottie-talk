@@ -1,6 +1,6 @@
 {
   "name": "dottie-talk",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "license": "MIT",
   "type": "module",
   "description": "Local parakeet STT + koko TTS via MCP and HTTP — standalone, no gateway hop",
@@ -35,7 +35,7 @@
     "http": "node http.js",
     "tts": "node ensure-tts.js",
     "install:bins": "bash scripts/install_bins.sh",
-    "test": "node --test core.test.js cli.test.js config.test.js keys.test.js keys_hypr.test.js"
+    "test": "node --test core.test.js cli.test.js config.test.js keys.test.js keys_hypr.test.js state.test.js bar.test.js plugin/sd.dottie-talk/Model.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0"

@@ -107,8 +107,9 @@ describe('speakSelection', () => {
   let restore;
   afterEach(() => restore?.());
 
-  it('no-ops when disabled', async () => {
+  it('hotkey no-ops when disabled', async () => {
     restore = isolate();
+    process.env.DOTTIE_TALK_KEYS_HOTKEY = '1';
     const r = await speakSelection({
       execFileFn: async () => ({ stdout: 'hi' }),
       speakFn: async () => { throw new Error('should not speak'); },

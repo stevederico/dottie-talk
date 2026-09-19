@@ -147,8 +147,10 @@ export async function speakSelection({
   ensureTtsFn = ensureTtsRunning,
 } = {}) {
   const status = keysStatus();
-  if (!status.enabled) return { skipped: 'disabled' };
-  if (isHotkeyInvoke() && !status.armed) return { skipped: 'server-down' };
+  if (isHotkeyInvoke()) {
+    if (!status.enabled) return { skipped: 'disabled' };
+    if (!status.armed) return { skipped: 'server-down' };
+  }
   if (isSpeaking()) return { ...stopSpeak(), stopped: true };
 
   const text = await readSelection({ execFileFn });
@@ -185,8 +187,10 @@ export async function speakSelection({
 
 export async function dictate({ execFileFn = execFileAsync } = {}) {
   const status = keysStatus();
-  if (!status.enabled) return { skipped: 'disabled' };
-  if (isHotkeyInvoke() && !status.armed) return { skipped: 'server-down' };
+  if (isHotkeyInvoke()) {
+    if (!status.enabled) return { skipped: 'disabled' };
+    if (!status.armed) return { skipped: 'server-down' };
+  }
   try {
     await execFileFn('voxtype', ['record', 'toggle'], { timeout: 5000, encoding: 'utf8' });
     return { ok: true };

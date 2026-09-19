@@ -11,6 +11,7 @@ import { ensureBinsRunning, binsHealth, stopBins, sttBackend } from './bin_super
 import { transcribe, speak } from './core.js';
 import { keysStatus } from './keys.js';
 import { armKeys, disarmKeys } from './keys_hypr.js';
+import { buildTalkState, clearTalkState, writeTalkPid, writeTalkState } from './state.js';
 
 const STT = `http://127.0.0.1:${PORTS.STT_PORT}`;
 const TTS = `http://127.0.0.1:${PORTS.TTS_PORT}`;
@@ -138,14 +139,25 @@ export function createTalkServer() {
   });
 }
 
+async function publishTalkState() {
+  try {
+    writeTalkState(buildTalkState(await binsHealth()));
+  } catch { /* ok */ }
+}
+
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
   const port = Number(process.env.DOTTIE_TALK_HTTP_PORT || PORTS.TALK_HTTP_PORT);
   ensureBinsRunning()
     .then(() => {
       const server = createTalkServer();
+      let stateTimer = null;
       server.listen(port, '127.0.0.1', () => {
         process.stderr.write(`[dottie-talk] HTTP listening on 127.0.0.1:${port}\n`);
+        writeTalkPid();
+        publishTalkState();
+        stateTimer = setInterval(() => { publishTalkState(); }, 400);
+        stateTimer.unref?.();
         armKeys().then((keys) => {
           if (keys.armed) {
             process.stderr.write(`[dottie-talk] keys armed speak=${keys.speak} dictate=${keys.dictate}\n`);
@@ -153,8 +165,15 @@ if (isMain) {
         }).catch((err) => {
           process.stderr.write(`[dottie-talk] keys: ${err.message}\n`);
         });
+        import('./bar.js').then((bar) => bar.installBar()).then((info) => {
+          process.stderr.write(`[dottie-talk] bar ${info.id} ${info.onBar ? 'on' : 'skipped'}\n`);
+        }).catch((err) => {
+          process.stderr.write(`[dottie-talk] bar: ${err.message}\n`);
+        });
       });
       const shutdown = () => {
+        if (stateTimer) clearInterval(stateTimer);
+        clearTalkState();
         Promise.resolve(disarmKeys()).finally(() => {
           stopBins();
           server.close(() => process.exit(0));

@@ -45,4 +45,11 @@ describe('parseArgs', () => {
     assert.equal(r.cmd, 'keys');
     assert.equal(r.keysAction, 'status');
   });
+
+  it('parses bar on and stop', () => {
+    const bar = parseArgs(['node', 'cli.js', 'bar', 'on']);
+    assert.equal(bar.cmd, 'bar');
+    assert.equal(bar.barAction, 'on');
+    assert.equal(parseArgs(['node', 'cli.js', 'stop']).cmd, 'stop');
+  });
 });

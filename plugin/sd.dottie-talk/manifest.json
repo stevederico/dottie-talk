@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "sd.dottie-talk",
+  "name": "Talk",
+  "version": "0.5.0",
+  "author": "sd",
+  "license": "MIT",
+  "description": "dottie-talk menubar: speak, keys, stop. Icon only while the server is running.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Talk",
+    "description": "Local STT/TTS (menubar while dottie-talk is running)",
+    "category": "Audio",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
