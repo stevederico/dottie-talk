@@ -11,7 +11,7 @@ export const DEFAULT_KEYS = Object.freeze({
   enabled: false,
   speak: 'SUPER + SHIFT + S',
   stop: 'ESCAPE',
-  dictate: 'SUPER + CTRL + D',
+  dictate: '',
   voice: '',
 });
 

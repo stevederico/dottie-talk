@@ -47,11 +47,11 @@ dottie-talk keys on
 npm start
 ```
 
-| Chord | Action |
-|---|---|
-| Super+Shift+S | Speak primary selection (else clipboard). Second tap stops. |
-| Super+Ctrl+D | Toggle voxtype dictation |
-| Escape | Stop speak while playback is active |
+| Chord | Action | Omarchy |
+|---|---|---|
+| Super+Shift+S | Speak primary selection (else clipboard). Second tap stops. | Replaces Google Maps **while armed** |
+| Escape | Stop speak | Only consumed while playback is active |
+| (none) | Dictate | Stock Super+Ctrl+X toggle / F9 push-to-talk |
 
 Config: `~/.config/dottie-talk/config.json`
 
@@ -61,7 +61,7 @@ Config: `~/.config/dottie-talk/config.json`
     "enabled": false,
     "speak": "SUPER + SHIFT + S",
     "stop": "ESCAPE",
-    "dictate": "SUPER + CTRL + D",
+    "dictate": "",
     "voice": ""
   }
 }

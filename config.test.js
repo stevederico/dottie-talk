@@ -29,7 +29,7 @@ describe('loadConfig', () => {
     const cfg = loadConfig();
     assert.equal(cfg.keys.enabled, false);
     assert.equal(cfg.keys.speak, DEFAULT_KEYS.speak);
-    assert.equal(cfg.keys.dictate, DEFAULT_KEYS.dictate);
+    assert.equal(cfg.keys.dictate, '');
   });
 
   it('reads enabled from file', () => {
@@ -51,6 +51,12 @@ describe('loadConfig', () => {
     saveConfig({ keys: { enabled: true } });
     process.env.DOTTIE_TALK_KEYS = 'off';
     assert.equal(loadConfig().keys.enabled, false);
+  });
+
+  it('does not steal Omarchy Display or voxtype', () => {
+    restore = isolate();
+    assert.equal(DEFAULT_KEYS.dictate, '');
+    assert.notEqual(DEFAULT_KEYS.speak, 'SUPER + CTRL + D');
   });
 
   it('ignores corrupt JSON', () => {

@@ -1,3 +1,7 @@
+0.4.1
+
+  Drop Display conflict
+
 0.4.0
 
   Add optional keys
