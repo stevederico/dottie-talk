@@ -33,4 +33,16 @@ describe('parseArgs', () => {
   it('defaults to help', () => {
     assert.equal(parseArgs(['node', 'cli.js']).cmd, 'help');
   });
+
+  it('parses keys on', () => {
+    const r = parseArgs(['node', 'cli.js', 'keys', 'on']);
+    assert.equal(r.cmd, 'keys');
+    assert.equal(r.keysAction, 'on');
+  });
+
+  it('keys defaults to status', () => {
+    const r = parseArgs(['node', 'cli.js', 'keys']);
+    assert.equal(r.cmd, 'keys');
+    assert.equal(r.keysAction, 'status');
+  });
 });

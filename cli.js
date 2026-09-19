@@ -29,11 +29,13 @@ Usage:
   transcribe <audio.wav>
   dottie-talk start
   dottie-talk health
+  dottie-talk keys [on|off|status|speak|stop|dictate]
   dottie-talk help
 
 speak writes WAV to -o, or stdout when piped, else ./speech.wav.
 transcribe prints text to stdout.
 start runs the HTTP façade on :${PORTS.TALK_HTTP_PORT}.
+keys is off by default. on installs Hyprland binds; they arm while start is running.
 `;
   process.stderr.write(text);
   process.exit(code);
@@ -41,7 +43,7 @@ start runs the HTTP façade on :${PORTS.TALK_HTTP_PORT}.
 
 /**
  * @param {string[]} argv
- * @returns {{ cmd: string, text: string, file: string, out: string, voice: string }}
+ * @returns {{ cmd: string, text: string, file: string, out: string, voice: string, keysAction: string }}
  */
 export function parseArgs(argv) {
   const bin = path.basename(argv[1] || '').replace(/\.js$/, '');
@@ -73,6 +75,7 @@ export function parseArgs(argv) {
     cmd,
     text: cmd === 'speak' ? positionals.join(' ') : '',
     file: cmd === 'transcribe' ? (positionals[0] || '') : '',
+    keysAction: cmd === 'keys' ? (positionals[0] || 'status') : '',
     out,
     voice,
   };
@@ -120,9 +123,17 @@ async function cmdTranscribe({ file }) {
 }
 
 async function cmdHealth() {
+  const { keysStatus } = await import('./keys.js');
   const h = await binsHealth();
-  process.stdout.write(`${JSON.stringify({ service: 'dottie-talk', ...h }, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify({ service: 'dottie-talk', ...h, keys: keysStatus() }, null, 2)}\n`);
   process.exit(h.ok ? 0 : 1);
+}
+
+async function cmdKeys(action) {
+  const { runKeysCommand } = await import('./keys_hypr.js');
+  const result = await runKeysCommand(action);
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (result && result.error) process.exit(1);
 }
 
 function cmdStart() {
@@ -153,6 +164,9 @@ async function main() {
       break;
     case 'health':
       await cmdHealth();
+      break;
+    case 'keys':
+      await cmdKeys(opts.keysAction);
       break;
     case 'help':
     case '-h':

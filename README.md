@@ -25,6 +25,9 @@ Bins ship in `bin/` (macOS). Models download on first boot (`~/.cache/parakeet.c
 | `dottie-talk transcribe a.wav` / `transcribe a.wav` | STT → text on stdout |
 | `dottie-talk start` | same as `npm start` |
 | `dottie-talk health` | STT/TTS readiness JSON |
+| `dottie-talk keys on` | enable talk-keys-style hotkeys (off by default) |
+| `dottie-talk keys off` | disable hotkeys |
+| `dottie-talk keys status` | enabled / armed / chords |
 
 ```bash
 npx speak "hello" -o hello.wav
@@ -34,6 +37,37 @@ npx transcribe hello.wav
 Node ≥22. Override STT with `DOTTIE_STT=voxtype` or `DOTTIE_STT=parakeet`.
 
 Linux: install Voxtype first (Omarchy: Install → AI → Dictation, or `voxtype-bin`). Streaming/multipart STT needs parakeet — buffered JSON `/v1/audio/transcriptions` works on both.
+
+## Keys (Linux)
+
+Talk-keys analog. **Off by default.** Enable, then keep `npm start` running so binds arm:
+
+```bash
+dottie-talk keys on
+npm start
+```
+
+| Chord | Action |
+|---|---|
+| Super+Shift+S | Speak primary selection (else clipboard). Second tap stops. |
+| Super+Ctrl+D | Toggle voxtype dictation |
+| Escape | Stop speak while playback is active |
+
+Config: `~/.config/dottie-talk/config.json`
+
+```json
+{
+  "keys": {
+    "enabled": false,
+    "speak": "SUPER + SHIFT + S",
+    "stop": "ESCAPE",
+    "dictate": "SUPER + CTRL + D",
+    "voice": ""
+  }
+}
+```
+
+`DOTTIE_TALK_KEYS=on` / `off` overrides `enabled`. Hotkeys no-op when the HTTP server is down. macOS: use [talk-keys](https://github.com/stevederico/talk-keys).
 
 ## Related
 

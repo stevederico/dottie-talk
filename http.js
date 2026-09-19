@@ -9,6 +9,8 @@ import { pathToFileURL } from 'node:url';
 import { PORTS } from './ports.js';
 import { ensureBinsRunning, binsHealth, stopBins, sttBackend } from './bin_supervise.js';
 import { transcribe, speak } from './core.js';
+import { keysStatus } from './keys.js';
+import { armKeys, disarmKeys } from './keys_hypr.js';
 
 const STT = `http://127.0.0.1:${PORTS.STT_PORT}`;
 const TTS = `http://127.0.0.1:${PORTS.TTS_PORT}`;
@@ -56,7 +58,7 @@ export async function handleTalkRequest(req, res) {
     if (req.method === 'GET' && url.pathname === '/health') {
       const bins = await binsHealth();
       res.writeHead(bins.ok ? 200 : 503, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: bins.ok, service: 'dottie-talk', ...bins }));
+      res.end(JSON.stringify({ ok: bins.ok, service: 'dottie-talk', ...bins, keys: keysStatus() }));
       return;
     }
 
@@ -144,10 +146,19 @@ if (isMain) {
       const server = createTalkServer();
       server.listen(port, '127.0.0.1', () => {
         process.stderr.write(`[dottie-talk] HTTP listening on 127.0.0.1:${port}\n`);
+        armKeys().then((keys) => {
+          if (keys.armed) {
+            process.stderr.write(`[dottie-talk] keys armed speak=${keys.speak} dictate=${keys.dictate}\n`);
+          }
+        }).catch((err) => {
+          process.stderr.write(`[dottie-talk] keys: ${err.message}\n`);
+        });
       });
       const shutdown = () => {
-        stopBins();
-        server.close(() => process.exit(0));
+        Promise.resolve(disarmKeys()).finally(() => {
+          stopBins();
+          server.close(() => process.exit(0));
+        });
       };
       process.on('SIGTERM', shutdown);
       process.on('SIGINT', shutdown);
