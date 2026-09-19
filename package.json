@@ -1,6 +1,6 @@
 {
   "name": "dottie-talk",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "license": "MIT",
   "type": "module",
   "description": "Local parakeet STT + koko TTS via MCP and HTTP — standalone, no gateway hop",

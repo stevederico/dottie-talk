@@ -40,7 +40,14 @@ export function wrapperPaths() {
 
 export function wrapperScript(action) {
   const node = process.execPath;
-  return `#!/bin/sh\n${MARKER}\nexport DOTTIE_TALK_KEYS_HOTKEY=1\nexec ${shellQuote(node)} ${shellQuote(CLI)} keys ${action} "$@"\n`;
+  return `#!/bin/sh
+${MARKER}
+export DOTTIE_TALK_KEYS_HOTKEY=1
+export XDG_RUNTIME_DIR="\${XDG_RUNTIME_DIR:-/run/user/\$(id -u)}"
+mkdir -p "\$XDG_RUNTIME_DIR/dottie-talk"
+echo "\$(date -Iseconds) ${action}" >> "\$XDG_RUNTIME_DIR/dottie-talk/keys.log"
+exec ${shellQuote(node)} ${shellQuote(CLI)} keys ${action} "$@"
+`;
 }
 
 function shellQuote(value) {
@@ -75,11 +82,7 @@ export function renderKeysLua({
     lines.push(`hl.unbind(${luaQuote(speak)})`);
     lines.push(`o.bind(${luaQuote(speak)}, "Speak selection", "setsid -f " .. ${luaQuote(speakBin)})`);
   }
-  if (dictate && dictateStartBin && dictateStopBin) {
-    lines.push(`hl.unbind(${luaQuote(dictate)})`);
-    lines.push(`o.bind(${luaQuote(dictate)}, "Start dictation", "setsid -f " .. ${luaQuote(dictateStartBin)})`);
-    lines.push(`o.bind(${luaQuote(dictate)}, "Stop dictation", "setsid -f " .. ${luaQuote(dictateStopBin)}, { release = true })`);
-  } else if (dictate && dictateBin) {
+  if (dictate && dictateBin) {
     lines.push(`hl.unbind(${luaQuote(dictate)})`);
     lines.push(`o.bind(${luaQuote(dictate)}, "Toggle dictation", "setsid -f " .. ${luaQuote(dictateBin)})`);
   }

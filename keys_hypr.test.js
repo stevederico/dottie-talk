@@ -35,15 +35,12 @@ describe('renderKeysLua', () => {
       dictate: 'SUPER + SHIFT + V',
       speakBin: '/tmp/speak-selection',
       stopBin: '/tmp/speak-stop',
-      dictateStartBin: '/tmp/dottie-talk-dictate-start',
-      dictateStopBin: '/tmp/dottie-talk-dictate-stop',
+      dictateBin: '/tmp/dottie-talk-dictate',
     });
     assert.match(lua, /dottie-talk-keys\.on/);
     assert.match(lua, /if not f then/);
     assert.match(lua, /Speak selection/);
-    assert.match(lua, /Start dictation/);
-    assert.match(lua, /Stop dictation/);
-    assert.match(lua, /release = true/);
+    assert.match(lua, /Toggle dictation/);
     assert.match(lua, /setsid -f /);
     assert.equal(lua.includes('wl-paste'), false);
     assert.equal(lua.includes('hyprctl'), false);
@@ -53,11 +50,10 @@ describe('renderKeysLua', () => {
     const lua = renderKeysLua({
       speak: '',
       dictate: 'SUPER + SHIFT + V',
-      dictateStartBin: '/bin/start',
-      dictateStopBin: '/bin/stop',
+      dictateBin: '/bin/x',
     });
     assert.equal(lua.includes('Speak selection'), false);
-    assert.match(lua, /Start dictation/);
+    assert.match(lua, /Toggle dictation/);
   });
 });
 

@@ -358,7 +358,25 @@ function resolveKokoBin() {
   return null;
 }
 
+function killWedgedTts() {
+  const p = children.tts;
+  if (p && !p.killed) {
+    try { p.kill('SIGKILL'); } catch { /* ok */ }
+    children.tts = null;
+  }
+  try {
+    execSync("pkill -9 -f '[k]oko-linux-x86_64|[k]oko openai --port'", {
+      stdio: 'ignore',
+      timeout: 2000,
+    });
+  } catch { /* none running */ }
+}
+
 async function spawnTts() {
+  if (await healthOk(`http://127.0.0.1:${PORTS.TTS_PORT}/`)) return true;
+  log('TTS not answering — killing wedged koko');
+  killWedgedTts();
+  await new Promise((r) => setTimeout(r, 250));
   if (await healthOk(`http://127.0.0.1:${PORTS.TTS_PORT}/`)) return true;
   const bin = resolveKokoBin();
   if (!bin) throw new Error(`koko not found — run: npm run install:bins`);

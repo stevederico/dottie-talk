@@ -52,7 +52,7 @@ npm start
 | Chord | Action | Omarchy |
 |---|---|---|
 | Super+Shift+S | Speak primary selection (else clipboard). Second tap stops. | Replaces Google Maps **while armed** |
-| Super+Shift+V | Hold to dictate (voxtype). Release stops. | Leaves Super+Ctrl+X / F9 alone |
+| Super+Shift+V | Toggle dictation (voxtype) | Leaves Super+Ctrl+X / F9 alone |
 | Escape | Stop speak | Only consumed while playback is active |
 
 Config: `~/.config/dottie-talk/config.json`

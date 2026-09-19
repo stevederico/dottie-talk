@@ -3,8 +3,8 @@
  * Hotkeys only fire when keys.enabled and the HTTP server is up.
  */
 
-import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { execFile, spawn } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -13,6 +13,16 @@ import { ensureTtsRunning } from './bin_supervise.js';
 import { loadConfig } from './config.js';
 
 const execFileAsync = promisify(execFile);
+
+export function notifyTalk(body) {
+  try {
+    const child = spawn('notify-send', ['-a', 'Talk', 'Talk', String(body || '')], {
+      stdio: 'ignore',
+      detached: true,
+    });
+    child.unref?.();
+  } catch { /* no notifier */ }
+}
 
 export function runtimeDir() {
   return process.env.XDG_RUNTIME_DIR || tmpdir();
@@ -141,8 +151,9 @@ function binOnPath(bin) {
 
 export async function speakSelection({
   execFileFn = execFileAsync,
-  spawnFn,
+  spawnFn = spawn,
   whichFn = binOnPath,
+  notifyFn = notifyTalk,
   speakFn = speak,
   ensureTtsFn = ensureTtsRunning,
 } = {}) {
@@ -154,11 +165,17 @@ export async function speakSelection({
   if (isSpeaking()) return { ...stopSpeak(), stopped: true };
 
   const text = await readSelection({ execFileFn });
-  if (!text) return { empty: true };
+  if (!text) {
+    notifyFn('Nothing selected');
+    return { empty: true };
+  }
 
   await ensureTtsFn();
   const result = await speakFn({ text, voice: status.voice || undefined });
-  if (result.error) return { error: result.error };
+  if (result.error) {
+    notifyFn(result.error);
+    return { error: result.error };
+  }
 
   const dir = path.join(tmpdir(), 'dottie-talk-keys');
   mkdirSync(dir, { recursive: true });
@@ -166,26 +183,20 @@ export async function speakSelection({
   writeFileSync(wavPath, Buffer.from(result.audioBase64, 'base64'));
 
   const bin = whichPlayer(whichFn);
-  if (!bin) return { error: 'no audio player (pw-play, paplay, mpv, ffplay)' };
+  if (!bin) {
+    const error = 'no audio player (pw-play, paplay, mpv, ffplay)';
+    notifyFn(error);
+    return { error };
+  }
   const args = playerCommands(wavPath).find((c) => c[0] === bin).slice(1);
-  if (spawnFn) {
-    const child = spawnFn(bin, args, { stdio: 'ignore', detached: true });
-    child.unref?.();
-    markSpeaking(child.pid);
-    child.on?.('exit', () => clearSpeaking());
-    return { text, pid: child.pid };
-  }
-  markSpeaking(process.pid);
-  try {
-    await execFileFn(bin, args, { timeout: 120_000 });
-  } finally {
-    clearSpeaking();
-    try { rmSync(wavPath, { force: true }); } catch { /* ok */ }
-  }
-  return { text };
+  const child = spawnFn(bin, args, { stdio: 'ignore', detached: true });
+  child.unref?.();
+  markSpeaking(child.pid);
+  child.on?.('exit', () => clearSpeaking());
+  return { text, pid: child.pid };
 }
 
-export async function dictate({ execFileFn = execFileAsync, mode = 'toggle' } = {}) {
+export async function dictate({ execFileFn = execFileAsync, mode = 'toggle', notifyFn = notifyTalk } = {}) {
   const status = keysStatus();
   if (isHotkeyInvoke()) {
     if (!status.enabled) return { skipped: 'disabled' };
@@ -194,12 +205,17 @@ export async function dictate({ execFileFn = execFileAsync, mode = 'toggle' } = 
   const verb = mode === 'start' || mode === 'stop' ? mode : 'toggle';
   try {
     await execFileFn('voxtype', ['record', verb], { timeout: 5000, encoding: 'utf8' });
+    notifyFn(verb === 'start' ? 'Dictation on' : verb === 'stop' ? 'Dictation off' : 'Dictation toggle');
     return { ok: true, mode: verb };
   } catch (err) {
     const msg = err && err.message ? String(err.message) : String(err);
     if (/ENOENT|not found/i.test(msg) || err.code === 'ENOENT') {
-      return { error: 'voxtype not found on PATH — Omarchy: Install > AI > Dictation' };
+      const error = 'voxtype not found on PATH — Omarchy: Install > AI > Dictation';
+      notifyFn(error);
+      return { error };
     }
-    return { error: `voxtype: ${msg.slice(0, 300)}` };
+    const error = `voxtype: ${msg.slice(0, 300)}`;
+    notifyFn(error);
+    return { error };
   }
 }

@@ -1,3 +1,8 @@
+0.6.3
+
+  Fix dead hotkeys
+  Notify on speak
+
 0.6.2
 
   Show both chords

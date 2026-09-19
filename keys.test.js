@@ -152,6 +152,7 @@ describe('speakSelection', () => {
       },
       whichFn: (bin) => bin === 'pw-play',
       spawnFn: () => ({ pid: 9, unref() {}, on() {} }),
+      notifyFn: () => {},
       speakFn: async ({ text }) => {
         assert.equal(text, 'hello there');
         return { audioBase64: Buffer.from('wav').toString('base64'), contentType: 'audio/wav' };

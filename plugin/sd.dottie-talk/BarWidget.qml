@@ -177,7 +177,7 @@ BarWidget {
 
       Text {
         width: parent.width
-        text: "Dictate  hold " + root.dictateChord
+        text: "Dictate  " + root.dictateChord
         color: root.bar.foreground
         font.family: root.bar.fontFamily
         font.pixelSize: Style.font.body

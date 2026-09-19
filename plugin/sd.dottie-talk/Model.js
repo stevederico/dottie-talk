@@ -57,5 +57,5 @@ function statusLine(state) {
 function keysDescription(speak, dictate) {
   var s = speak || "SUPER + SHIFT + S"
   var d = dictate || "SUPER + SHIFT + V"
-  return "Speak " + s + "\nHold " + d + " dictate"
+  return "Speak " + s + "\nDictate " + d
 }
