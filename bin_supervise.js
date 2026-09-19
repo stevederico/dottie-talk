@@ -362,6 +362,8 @@ async function spawnTts() {
       ...process.env,
       PATH: binPathEnv(),
       PIPER_ESPEAKNG_DATA_DIRECTORY: espeakDataDir,
+      ESPEAK_DATA_PATH: espeakDataDir,
+      ESPEAKNG_DATA_PATH: espeakDataDir,
     },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
