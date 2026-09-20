@@ -9,9 +9,9 @@ import path from 'node:path';
 
 export const DEFAULT_KEYS = Object.freeze({
   enabled: false,
-  speak: 'SUPER + SHIFT + S',
+  speak: 'ALT + S',
   stop: 'ESCAPE',
-  dictate: 'SUPER + SHIFT + V',
+  dictate: 'ALT + D',
   voice: '',
 });
 

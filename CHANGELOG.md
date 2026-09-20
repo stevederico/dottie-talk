@@ -1,3 +1,17 @@
+0.8.0
+
+  Default Alt+S speak
+  Hold Alt+D dictate
+  Push bar status
+  Guard busy speak
+  Prefer clipboard text
+  Speak fresh selection
+  Selection then clipboard
+  Clean Talk popup
+  Fix red mic icon
+  Classic loading spinner
+  Monochrome voice icon
+
 0.7.0
 
   Spin bar while TTS

@@ -82,7 +82,11 @@ export function renderKeysLua({
     lines.push(`hl.unbind(${luaQuote(speak)})`);
     lines.push(`o.bind(${luaQuote(speak)}, "Speak selection", "setsid -f " .. ${luaQuote(speakBin)})`);
   }
-  if (dictate && dictateBin) {
+  if (dictate && dictateStartBin && dictateStopBin) {
+    lines.push(`hl.unbind(${luaQuote(dictate)})`);
+    lines.push(`o.bind(${luaQuote(dictate)}, "Start dictation (push-to-talk)", "setsid -f " .. ${luaQuote(dictateStartBin)})`);
+    lines.push(`o.bind(${luaQuote(dictate)}, "Stop dictation (push-to-talk)", "setsid -f " .. ${luaQuote(dictateStopBin)}, { release = true })`);
+  } else if (dictate && dictateBin) {
     lines.push(`hl.unbind(${luaQuote(dictate)})`);
     lines.push(`o.bind(${luaQuote(dictate)}, "Toggle dictation", "setsid -f " .. ${luaQuote(dictateBin)})`);
   }

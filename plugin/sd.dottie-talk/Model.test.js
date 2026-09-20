@@ -23,10 +23,11 @@ describe('Model.js', () => {
       status: 'idle',
       stt: true,
       tts: true,
+      keysEnabled: true,
       keysArmed: true,
     }));
-    assert.equal(ctx.statusLabel(on), 'On');
-    assert.match(ctx.statusLine(on), /keys/);
+    assert.equal(ctx.statusLabel(on), 'Ready');
+    assert.equal(ctx.statusLine(on), 'Ready');
   });
 
   it('labels processing', () => {
@@ -35,13 +36,12 @@ describe('Model.js', () => {
       pid: 3,
       status: 'processing',
     }));
-    assert.equal(ctx.statusLabel(busy), 'Working');
+    assert.equal(ctx.statusLabel(busy), 'Preparing');
   });
 
   it('lists speak and dictate', () => {
-    const text = ctx.keysDescription('SUPER + SHIFT + S', 'SUPER + SHIFT + V');
-    assert.match(text, /Speak SUPER \+ SHIFT \+ S/);
-    assert.match(text, /Dictate SUPER \+ SHIFT \+ V/);
-    assert.match(text, /\n/);
+    const text = ctx.keysDescription('ALT + S', 'ALT + D');
+    assert.match(text, /Speak ALT \+ S/);
+    assert.match(text, /Hold ALT \+ D to dictate/);
   });
 });

@@ -38,7 +38,7 @@ speak writes WAV to -o, or stdout when piped, else ./speech.wav.
 transcribe prints text to stdout.
 start runs the HTTP façade on :${PORTS.TALK_HTTP_PORT}.
 keys is off by default. on installs Hyprland binds; they arm while start is running.
-Speak Super+Shift+S. Super+Shift+V toggles dictate. Escape stops speak.
+Speak Alt+S. Hold Alt+D to dictate. Escape stops speak.
 stop ends the HTTP server. bar on puts the Omarchy menubar icon (visible while start is running).
 `;
   process.stderr.write(text);

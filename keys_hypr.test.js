@@ -30,17 +30,21 @@ describe('injectHyprland', () => {
 describe('renderKeysLua', () => {
   it('no-ops without the runtime flag', () => {
     const lua = renderKeysLua({
-      speak: 'SUPER + SHIFT + S',
+      speak: 'ALT + S',
       stop: 'ESCAPE',
-      dictate: 'SUPER + SHIFT + V',
+      dictate: 'ALT + D',
       speakBin: '/tmp/speak-selection',
       stopBin: '/tmp/speak-stop',
       dictateBin: '/tmp/dottie-talk-dictate',
+      dictateStartBin: '/tmp/dottie-talk-dictate-start',
+      dictateStopBin: '/tmp/dottie-talk-dictate-stop',
     });
     assert.match(lua, /dottie-talk-keys\.on/);
     assert.match(lua, /if not f then/);
     assert.match(lua, /Speak selection/);
-    assert.match(lua, /Toggle dictation/);
+    assert.match(lua, /Start dictation \(push-to-talk\)/);
+    assert.match(lua, /Stop dictation \(push-to-talk\)/);
+    assert.match(lua, /release = true/);
     assert.match(lua, /setsid -f /);
     assert.equal(lua.includes('wl-paste'), false);
     assert.equal(lua.includes('hyprctl'), false);
@@ -49,11 +53,21 @@ describe('renderKeysLua', () => {
   it('skips empty chords', () => {
     const lua = renderKeysLua({
       speak: '',
-      dictate: 'SUPER + SHIFT + V',
-      dictateBin: '/bin/x',
+      dictate: 'ALT + D',
+      dictateStartBin: '/bin/start',
+      dictateStopBin: '/bin/stop',
     });
     assert.equal(lua.includes('Speak selection'), false);
+    assert.match(lua, /Start dictation \(push-to-talk\)/);
+  });
+
+  it('falls back to toggle when only dictateBin is set', () => {
+    const lua = renderKeysLua({
+      dictate: 'ALT + D',
+      dictateBin: '/bin/x',
+    });
     assert.match(lua, /Toggle dictation/);
+    assert.equal(lua.includes('push-to-talk'), false);
   });
 });
 
@@ -92,6 +106,8 @@ describe('enableKeys install', () => {
     assert.equal(status.enabled, true);
     const lua = readFileSync(keysLuaPath(), 'utf8');
     assert.match(lua, /Speak selection/);
+    assert.match(lua, /Start dictation \(push-to-talk\)/);
+    assert.match(lua, /release = true/);
     const hypr = readFileSync(path.join(dir, 'hypr', 'hyprland.lua'), 'utf8');
     assert.match(hypr, /dottie-talk-keys: begin/);
     const bins = wrapperPaths();

@@ -53,12 +53,12 @@ describe('parseTalkState', () => {
       ok: true,
       keysEnabled: true,
       keysArmed: true,
-      speak: 'SUPER + SHIFT + S',
+      speak: 'ALT + S',
     }));
     assert.equal(s.running, true);
     assert.equal(s.status, 'speaking');
     assert.equal(s.keysArmed, true);
-    assert.equal(s.speak, 'SUPER + SHIFT + S');
+    assert.equal(s.speak, 'ALT + S');
   });
 
   it('keeps processing status', () => {

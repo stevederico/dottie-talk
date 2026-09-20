@@ -55,9 +55,12 @@ describe('loadConfig', () => {
 
   it('does not steal Omarchy Display or voxtype', () => {
     restore = isolate();
+    assert.equal(DEFAULT_KEYS.speak, 'ALT + S');
+    assert.equal(DEFAULT_KEYS.dictate, 'ALT + D');
     assert.notEqual(DEFAULT_KEYS.dictate, 'SUPER + CTRL + D');
     assert.notEqual(DEFAULT_KEYS.dictate, 'SUPER + CTRL + X');
     assert.notEqual(DEFAULT_KEYS.speak, 'SUPER + CTRL + D');
+    assert.notEqual(DEFAULT_KEYS.speak, 'SUPER + SHIFT + S');
   });
 
   it('ignores corrupt JSON', () => {

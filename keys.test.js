@@ -48,11 +48,16 @@ function isolate() {
 }
 
 describe('pickText', () => {
-  it('prefers primary', () => {
+  it('prefers selection over clipboard', () => {
     assert.equal(pickText(' highlighted ', 'clip'), 'highlighted');
   });
 
-  it('skips URL-only primary', () => {
+  it('uses clipboard when nothing is selected', () => {
+    assert.equal(pickText('', 'clip text'), 'clip text');
+    assert.equal(pickText('   ', 'clip text'), 'clip text');
+  });
+
+  it('skips URL-only selection', () => {
     assert.equal(pickText('https://x.com/foo', 'hello'), 'hello');
   });
 
@@ -93,16 +98,24 @@ describe('keysStatus', () => {
 });
 
 describe('readSelection', () => {
-  it('uses primary then clipboard', async () => {
-    const calls = [];
+  it('prefers primary selection then clipboard', async () => {
     const execFileFn = async (cmd, args) => {
-      calls.push([cmd, args.slice()]);
       if (args.includes('--primary')) return { stdout: '  sel  ' };
       return { stdout: 'clip' };
     };
-    assert.equal(await readSelection({ execFileFn }), 'sel');
-    assert.equal(calls[0][0], 'wl-paste');
-    assert.ok(calls[0][1].includes('--primary'));
+    const r = await readSelection({ execFileFn });
+    assert.equal(r.text, 'sel');
+    assert.equal(r.source, 'primary');
+  });
+
+  it('falls back to clipboard when primary is empty', async () => {
+    const execFileFn = async (cmd, args) => {
+      if (args.includes('--primary')) return { stdout: '' };
+      return { stdout: 'clip' };
+    };
+    const r = await readSelection({ execFileFn });
+    assert.equal(r.text, 'clip');
+    assert.equal(r.source, 'clipboard');
   });
 });
 
@@ -140,6 +153,20 @@ describe('speakSelection', () => {
     const r = stopSpeak({ killFn: (pid) => { killed = pid; } });
     assert.equal(r.stopped, true);
     assert.equal(killed, 1234);
+  });
+
+  it('skips while already processing', async () => {
+    restore = isolate();
+    saveConfig({ keys: { enabled: true } });
+    writeKeysFlag();
+    markProcessing();
+    const r = await speakSelection({
+      execFileFn: async () => ({ stdout: 'hello' }),
+      speakFn: async () => { throw new Error('should not speak'); },
+      notifyFn: () => {},
+    });
+    assert.equal(r.skipped, 'busy');
+    clearProcessing();
   });
 
   it('speaks selected text', async () => {

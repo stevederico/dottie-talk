@@ -4,7 +4,7 @@
  */
 
 import { execFile, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -48,26 +48,55 @@ export function processingPath() {
 export function markProcessing() {
   mkdirSync(path.dirname(processingPath()), { recursive: true });
   writeFileSync(processingPath(), `${process.pid}\n`);
+  bumpBarStatus('processing');
 }
 
 export function clearProcessing() {
   try { unlinkSync(processingPath()); } catch { /* ok */ }
+  if (!isSpeaking()) bumpBarStatus('idle');
 }
 
 export function isProcessing() {
   return existsSync(processingPath());
 }
 
+/** Patch bar state immediately — do not wait for the HTTP 400ms ticker. */
+export function bumpBarStatus(status) {
+  const dest = path.join(runtimeDir(), 'dottie-talk', 'state');
+  try {
+    const cur = JSON.parse(readFileSync(dest, 'utf8') || '{}');
+    if (!cur || cur.running !== true) return;
+    if (cur.status === status) return;
+    cur.status = status;
+    const tmp = `${dest}.${process.pid}.bump.tmp`;
+    writeFileSync(tmp, `${JSON.stringify(cur)}\n`);
+    renameSync(tmp, dest);
+  } catch { /* server will refresh */ }
+}
+
 export function isUrlOnly(text) {
   return /^https?:\/\/\S+$/i.test(String(text || '').trim());
 }
 
+/**
+ * If something is selected (primary), speak that. Otherwise use the clipboard.
+ */
+export function resolveSpeakText(primary, clipboard) {
+  const p = String(primary || '').trim();
+  const c = String(clipboard || '').trim();
+  if (p && !isUrlOnly(p)) return { text: p, source: 'primary' };
+  if (c && !isUrlOnly(c)) return { text: c, source: 'clipboard' };
+  return { text: '', source: '' };
+}
+
 export function pickText(primary, clipboard) {
-  const first = String(primary || '').trim();
-  const second = String(clipboard || '').trim();
-  if (first && !isUrlOnly(first)) return first;
-  if (second && !isUrlOnly(second)) return second;
-  return '';
+  return resolveSpeakText(primary, clipboard).text;
+}
+
+export async function clearPrimarySelection({ execFileFn = execFileAsync } = {}) {
+  try {
+    await execFileFn('wl-copy', ['--primary', '--clear'], { timeout: 1500 });
+  } catch { /* ok */ }
 }
 
 export function isHotkeyInvoke() {
@@ -114,7 +143,7 @@ export async function readSelection({ execFileFn = execFileAsync } = {}) {
       return '';
     }
   };
-  return pickText(await grab(true), await grab(false));
+  return resolveSpeakText(await grab(true), await grab(false));
 }
 
 function playerCommands(wavPath) {
@@ -138,16 +167,35 @@ export function markSpeaking(pid) {
   writeFileSync(speakActivePath(), `${pid}\n`);
   mkdirSync(path.dirname(speakPidPath()), { recursive: true });
   writeFileSync(speakPidPath(), `${pid}\n`);
+  bumpBarStatus('speaking');
 }
 
 export function clearSpeaking() {
   try { unlinkSync(speakActivePath()); } catch { /* ok */ }
   try { unlinkSync(speakPidPath()); } catch { /* ok */ }
   clearProcessing();
+  bumpBarStatus('idle');
 }
 
 export function isSpeaking() {
-  return existsSync(speakActivePath());
+  if (!existsSync(speakActivePath())) return false;
+  let pid = 0;
+  try {
+    pid = Number(readFileSync(speakPidPath(), 'utf8').trim()) || 0;
+  } catch {
+    try { pid = Number(readFileSync(speakActivePath(), 'utf8').trim()) || 0; } catch { /* ok */ }
+  }
+  if (pid > 1) {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      clearSpeaking();
+      return false;
+    }
+  }
+  clearSpeaking();
+  return false;
 }
 
 export function stopSpeak({ killFn = process.kill } = {}) {
@@ -180,13 +228,17 @@ export async function speakSelection({
     if (!status.enabled) return { skipped: 'disabled' };
     if (!status.armed) return { skipped: 'server-down' };
   }
+  // Second tap while playing stops. Key-repeat while TTS runs must not
+  // start a parallel speak that overwrites the WAV mid-playback.
   if (isSpeaking()) return { ...stopSpeak(), stopped: true };
+  if (isProcessing()) return { skipped: 'busy' };
 
-  const text = await readSelection({ execFileFn });
+  const { text, source } = await readSelection({ execFileFn });
   if (!text) {
     notifyFn('Nothing selected');
     return { empty: true };
   }
+  notifyFn(text.length > 72 ? `${text.slice(0, 72)}…` : text);
 
   markProcessing();
   try {
@@ -199,7 +251,8 @@ export async function speakSelection({
 
     const dir = path.join(tmpdir(), 'dottie-talk-keys');
     mkdirSync(dir, { recursive: true });
-    const wavPath = path.join(dir, 'speech.wav');
+    // Unique path: a second speak must not truncate the file pw-play is reading.
+    const wavPath = path.join(dir, `speech-${process.pid}-${Date.now()}.wav`);
     writeFileSync(wavPath, Buffer.from(result.audioBase64, 'base64'));
 
     const bin = whichPlayer(whichFn);
@@ -213,7 +266,12 @@ export async function speakSelection({
     child.unref?.();
     markSpeaking(child.pid);
     child.on?.('exit', () => clearSpeaking());
-    return { text, pid: child.pid };
+    // Drop primary after using it so the next Alt+S falls through to clipboard
+    // when nothing is newly selected (Wayland primary otherwise stays stale).
+    if (source === 'primary') {
+      clearPrimarySelection({ execFileFn }).catch(() => {});
+    }
+    return { text, source, pid: child.pid };
   } finally {
     clearProcessing();
   }

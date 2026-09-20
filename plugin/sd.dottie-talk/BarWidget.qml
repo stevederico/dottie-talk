@@ -10,14 +10,15 @@ BarWidget {
   moduleName: "sd.dottie-talk"
 
   property bool popupOpen: false
+  property bool clickLock: false
   property bool running: false
   property string status: "off"
   property bool stt: false
   property bool tts: false
   property bool keysEnabled: false
   property bool keysArmed: false
-  property string speakChord: "SUPER + SHIFT + S"
-  property string dictateChord: "SUPER + SHIFT + V"
+  property string speakChord: "ALT + S"
+  property string dictateChord: "ALT + D"
   property bool speakingFile: false
   property bool processingFile: false
 
@@ -32,7 +33,8 @@ BarWidget {
     status: root.busy ? "processing" : (root.speaking ? "speaking" : root.status),
     stt: root.stt,
     tts: root.tts,
-    keysArmed: root.keysArmed
+    keysArmed: root.keysArmed,
+    keysEnabled: root.keysEnabled
   })
   readonly property string statusLabel: Model.statusLabel(root.snapshot)
   readonly property string statusIcon: Model.statusIcon(root.snapshot)
@@ -42,6 +44,9 @@ BarWidget {
   implicitHeight: root.running ? barSize : 0
   visible: root.running
   clip: true
+
+  function close() { root.popupOpen = false }
+  function open() { root.popupOpen = true }
 
   function applyState(raw) {
     var next = Model.parseState(raw)
@@ -53,8 +58,7 @@ BarWidget {
     keysArmed = next.keysArmed
     if (next.speak) speakChord = next.speak
     if (next.dictate) dictateChord = next.dictate
-    if (!next.running)
-      popupOpen = false
+    if (!next.running) root.close()
   }
 
   function runTalk(args) {
@@ -64,12 +68,22 @@ BarWidget {
   function handlePress(button) {
     if (button === Qt.MiddleButton) {
       root.runTalk(["stop"])
+      root.close()
       return
     }
+    if (root.clickLock) return
+    root.clickLock = true
+    clickLockTimer.restart()
     root.popupOpen = !root.popupOpen
   }
 
   function triggerPress(button) { root.handlePress(button) }
+
+  Timer {
+    id: clickLockTimer
+    interval: 160
+    onTriggered: root.clickLock = false
+  }
 
   FileView {
     id: stateFile
@@ -100,7 +114,7 @@ BarWidget {
   }
 
   Timer {
-    interval: root.running ? 400 : 2000
+    interval: root.busy || root.speaking ? 200 : (root.running ? 500 : 2000)
     running: true
     repeat: true
     onTriggered: stateFile.reload()
@@ -112,15 +126,17 @@ BarWidget {
     bar: root.bar
     opacity: root.busy ? 0 : 1
     text: root.statusIcon
-    active: root.speaking
-    tooltipText: root.running ? (root.statusLine + " · click for menu") : "Talk off"
+    // Do not use active/urgent (red) — that color means alerts, not speech.
+    active: false
+    useActiveColor: false
+    tooltipText: root.running ? (root.statusLine + " · click") : "Talk off"
     onPressed: function(b) { root.handlePress(b) }
   }
 
   Text {
     visible: root.busy
     anchors.centerIn: parent
-    text: "󰔟"
+    text: "󰝲"
     color: root.bar ? root.bar.barForeground : "#ddd"
     font.family: root.bar ? root.bar.fontFamily : ""
     font.pixelSize: Style.font.icon
@@ -147,15 +163,15 @@ BarWidget {
     bar: root.bar
     owner: root
     margin: Style.space(4)
-    triggerMode: root.popupOpen ? "click" : "hover"
+    triggerMode: "click"
     open: root.popupOpen
-    contentWidth: popup.fittedContentWidth(Style.space(360))
-    contentHeight: popup.fittedContentHeight(Math.max(column.implicitHeight, Style.space(280)))
+    contentWidth: popup.fittedContentWidth(Style.space(300))
+    contentHeight: popup.fittedContentHeight(column.implicitHeight)
 
     Column {
       id: column
       width: parent.width
-      spacing: Style.space(10)
+      spacing: Style.space(12)
 
       Row {
         width: parent.width
@@ -195,7 +211,7 @@ BarWidget {
 
       Toggle {
         width: parent.width
-        label: "Keys"
+        label: "Hotkeys"
         description: Model.keysDescription(root.speakChord, root.dictateChord)
         checked: root.keysEnabled
         foreground: root.bar.foreground
@@ -203,23 +219,7 @@ BarWidget {
         onClicked: root.runTalk(["keys", root.keysEnabled ? "off" : "on"])
       }
 
-      Text {
-        width: parent.width
-        text: "Speak  " + root.speakChord
-        color: root.bar.foreground
-        font.family: root.bar.fontFamily
-        font.pixelSize: Style.font.body
-        wrapMode: Text.WordWrap
-      }
-
-      Text {
-        width: parent.width
-        text: "Dictate  " + root.dictateChord
-        color: root.bar.foreground
-        font.family: root.bar.fontFamily
-        font.pixelSize: Style.font.body
-        wrapMode: Text.WordWrap
-      }
+      PanelSeparator { foreground: root.bar.foreground }
 
       Row {
         width: parent.width
@@ -241,12 +241,17 @@ BarWidget {
           onClicked: root.runTalk(["keys", "stop"])
         }
 
+        Item { width: Style.space(8); height: 1 }
+
         Button {
           text: "Quit"
           iconText: "󰅖"
           foreground: root.bar.foreground
           fontFamily: root.bar.fontFamily
-          onClicked: root.runTalk(["stop"])
+          onClicked: {
+            root.close()
+            root.runTalk(["stop"])
+          }
         }
       }
     }

@@ -38,28 +38,31 @@ function parseState(raw) {
 
 function statusLabel(state) {
   if (!state.running) return "Off"
-  if (state.status === "processing") return "Working"
+  if (state.status === "processing") return "Preparing"
   if (state.status === "speaking") return "Speaking"
-  return "On"
+  return "Ready"
 }
 
 function statusIcon(state) {
-  if (!state.running) return "󰝛"
-  if (state.status === "processing") return "󰔟"
-  if (state.status === "speaking") return "󰝚"
-  return "󰔊"
+  // Monochrome stand-in for 🗣️ (emoji is always blue/color).
+  // account-voice = person + speech lines, inherits bar foreground.
+  if (!state.running) return "󰻔"             // account-voice-off
+  if (state.status === "processing") return "󰝲" // loading (classic spinner)
+  return "󰗋"                                  // account-voice
 }
 
 function statusLine(state) {
-  if (!state.running) return "Talk off"
-  var bits = [statusLabel(state)]
-  bits.push(state.stt && state.tts ? "STT+TTS" : (state.tts ? "TTS" : (state.stt ? "STT" : "bins down")))
-  if (state.keysArmed) bits.push("keys")
-  return bits.join(" · ")
+  if (!state.running) return "Off"
+  if (state.status === "processing") return "Preparing speech…"
+  if (state.status === "speaking") return "Speaking"
+  if (!state.stt && !state.tts) return "Bins down"
+  if (state.keysEnabled && state.keysArmed) return "Ready"
+  if (state.keysEnabled) return "Ready · hotkeys arming"
+  return "Ready · hotkeys off"
 }
 
 function keysDescription(speak, dictate) {
-  var s = speak || "SUPER + SHIFT + S"
-  var d = dictate || "SUPER + SHIFT + V"
-  return "Speak " + s + "\nDictate " + d
+  var s = speak || "ALT + S"
+  var d = dictate || "ALT + D"
+  return "Speak " + s + " · Hold " + d + " to dictate"
 }
