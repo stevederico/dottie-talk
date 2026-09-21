@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { dirHasRequiredBins, isNativeBin, kokoCandidates } from './bin_supervise.js';
+import { dirHasRequiredBins, isNativeBin, kokoCandidates, voxtypeFetchSpec } from './bin_supervise.js';
 
 describe('isNativeBin', () => {
   it('accepts ELF on Linux', () => {
@@ -34,6 +34,19 @@ describe('dirHasRequiredBins', () => {
     writeFileSync(path.join(dir, 'koko-linux-x86_64'), Buffer.from([0x7f, 0x45, 0x4c, 0x46]));
     assert.equal(dirHasRequiredBins(dir), true);
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('voxtypeFetchSpec', () => {
+  it('points at the small AVX2 binary on linux x64', () => {
+    const spec = voxtypeFetchSpec();
+    if (process.platform !== 'linux' || process.arch !== 'x64') {
+      assert.equal(spec, null);
+      return;
+    }
+    assert.match(spec.url, /voxtype-1\.0\.1-linux-x86_64-avx2$/);
+    assert.equal(spec.bytes, 18245408);
+    assert.equal(spec.model, 'base.en');
   });
 });
 

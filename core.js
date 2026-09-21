@@ -67,7 +67,7 @@ async function transcribeVoxtype(buf, execFileFn) {
     const msg = err.stderr ? String(err.stderr).trim() : err.message;
     if (/ENOENT|not found/i.test(msg) || err.code === 'ENOENT') {
       return {
-        error: 'voxtype not found on PATH — Omarchy: Install > AI > Dictation, or install voxtype-bin',
+        error: 'voxtype missing — restart talk so it can download the binary',
       };
     }
     return { error: `voxtype: ${String(msg).slice(0, 300)}` };

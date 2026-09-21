@@ -3,9 +3,9 @@
  * Spawned when talk HTTP boots. Gateway no longer supervises these binaries.
  */
 
-import { spawn, execSync } from 'node:child_process';
+import { execFileSync, execSync, spawn } from 'node:child_process';
 import {
-  createWriteStream, existsSync, readFileSync, statSync, statfsSync, mkdirSync,
+  chmodSync, createWriteStream, existsSync, readFileSync, statSync, statfsSync, mkdirSync,
   symlinkSync, lstatSync, unlinkSync, rmSync, readdirSync, renameSync,
 } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
@@ -125,8 +125,30 @@ function voxtypeOnPath() {
   }
 }
 
-const VOXTYPE_MISSING =
-  'voxtype not found on PATH — Omarchy: Install > AI > Dictation, or install voxtype-bin';
+/** Pinned upstream asset. Not the 634 MB pacman package. */
+const VOXTYPE_VERSION = '1.0.1';
+const VOXTYPE_AVX2_BYTES = 18245408;
+
+export function voxtypeFetchSpec() {
+  if (process.platform !== 'linux' || process.arch !== 'x64') return null;
+  const model = (process.env.DOTTIE_VOXTYPE_MODEL || 'base.en').trim();
+  return {
+    version: VOXTYPE_VERSION,
+    url: process.env.VOXTYPE_URL
+      || `https://github.com/peteonrails/voxtype/releases/download/v${VOXTYPE_VERSION}/voxtype-${VOXTYPE_VERSION}-linux-x86_64-avx2`,
+    bytes: VOXTYPE_AVX2_BYTES,
+    model: /^[A-Za-z0-9._-]+$/.test(model) ? model : 'base.en',
+    dest: path.join(DATA_DIR, 'bin', 'voxtype'),
+  };
+}
+
+function prependBinDir(binPath) {
+  const dir = path.dirname(binPath);
+  const parts = (process.env.PATH || '').split(':').filter(Boolean);
+  if (!parts.includes(dir)) process.env.PATH = [dir, ...parts].join(':');
+}
+
+const VOXTYPE_MISSING = 'voxtype missing and this arch has no auto-download';
 
 const STT_GGUF = 'tdt-0.6b-v3-q8_0.gguf';
 const STT_GGUF_BYTES = 940663680;
@@ -288,12 +310,35 @@ function track(name, proc) {
   });
 }
 
-async function ensureVoxtypeReady() {
+export async function ensureVoxtypeReady() {
   if (voxtypeOnPath()) {
-    log('STT backend=voxtype (system CLI)');
+    log('STT backend=voxtype (already on PATH)');
     return true;
   }
-  throw new Error(VOXTYPE_MISSING);
+  const spec = voxtypeFetchSpec();
+  if (!spec) throw new Error(VOXTYPE_MISSING);
+  let size = 0;
+  try { size = statSync(spec.dest).size; } catch { /* missing */ }
+  if (!isNativeBin(spec.dest) || size !== spec.bytes) {
+    await ensureDownloadedFile({
+      url: spec.url,
+      dest: spec.dest,
+      expectedBytes: spec.bytes,
+      label: 'STT',
+    });
+  }
+  chmodSync(spec.dest, 0o755);
+  prependBinDir(spec.dest);
+  if (!voxtypeOnPath()) throw new Error(`voxtype downloaded but not on PATH (${spec.dest})`);
+  log(`STT backend=voxtype (${spec.dest})`);
+  execFileSync(spec.dest, [
+    'setup', '--download', '--model', spec.model, '--quiet', '--no-post-install',
+  ], {
+    stdio: 'inherit',
+    timeout: 600_000,
+    env: process.env,
+  });
+  return true;
 }
 
 async function spawnStt() {

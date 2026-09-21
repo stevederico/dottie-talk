@@ -1,3 +1,8 @@
+0.9.0
+
+  Fetch Linux voxtype
+  Skip when installed
+
 0.8.0
 
   Default Alt+S speak

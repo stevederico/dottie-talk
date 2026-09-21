@@ -291,7 +291,7 @@ export async function dictate({ execFileFn = execFileAsync, mode = 'toggle', not
   } catch (err) {
     const msg = err && err.message ? String(err.message) : String(err);
     if (/ENOENT|not found/i.test(msg) || err.code === 'ENOENT') {
-      const error = 'voxtype not found on PATH — Omarchy: Install > AI > Dictation';
+      const error = 'voxtype missing — restart talk so it can download the binary';
       notifyFn(error);
       return { error };
     }
