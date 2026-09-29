@@ -1,3 +1,7 @@
+0.9.1
+
+  Fix koko TTS hang
+
 0.9.0
 
   Fetch Linux voxtype

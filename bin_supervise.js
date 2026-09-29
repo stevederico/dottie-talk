@@ -375,7 +375,7 @@ async function spawnStt() {
   const proc = spawn(bin, args, {
     cwd: DOTTIE_DIR,
     env: { ...process.env, PATH: binPathEnv() },
-    stdio: ['ignore', 'ignore', 'pipe'],
+    stdio: 'ignore',
   });
   track('stt', proc);
   const deadline = Date.now() + 120_000;
@@ -438,7 +438,7 @@ async function spawnTts() {
       ESPEAK_DATA_PATH: espeakDataDir,
       ESPEAKNG_DATA_PATH: espeakDataDir,
     },
-    stdio: ['ignore', 'ignore', 'pipe'],
+    stdio: 'ignore',
   });
   track('tts', proc);
   const deadline = Date.now() + 120_000;
