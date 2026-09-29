@@ -1,6 +1,6 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -113,5 +113,18 @@ describe('enableKeys install', () => {
     assert.match(hypr, /dottie-talk-keys: begin/);
     const bins = wrapperPaths();
     assert.match(readFileSync(bins.speak, 'utf8'), /keys speak/);
+  });
+
+  it('does not rewrite an unchanged keys lua', async () => {
+    dir = mkdtempSync(path.join(os.tmpdir(), 'dottie-talk-hypr-'));
+    process.env.DOTTIE_TALK_CONFIG = path.join(dir, 'config.json');
+    process.env.DOTTIE_TALK_HYPR_DIR = path.join(dir, 'hypr');
+    process.env.DOTTIE_TALK_USER_BIN = path.join(dir, 'bin');
+    const { writeKeysLua } = await import('./keys_hypr.js');
+    const file = writeKeysLua();
+    const old = new Date('2020-01-01T00:00:00Z');
+    utimesSync(file, old, old);
+    writeKeysLua();
+    assert.equal(statSync(file).mtimeMs, old.getTime());
   });
 });

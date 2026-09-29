@@ -1,3 +1,7 @@
+0.9.3
+
+  Skip unchanged keys write
+
 0.9.2
 
   Fix duplicate Escape

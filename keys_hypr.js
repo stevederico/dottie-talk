@@ -175,8 +175,11 @@ export function writeKeysLua() {
     dictateStartBin: bins.dictateStart,
     dictateStopBin: bins.dictateStop,
   });
-  writeFileSync(keysLuaPath(), body);
-  return keysLuaPath();
+  // Hyprland autoreloads on config writes; skip identical rewrites so each
+  // arm costs one reload instead of stacking several.
+  const file = keysLuaPath();
+  if (!existsSync(file) || readFileSync(file, 'utf8') !== body) writeFileSync(file, body);
+  return file;
 }
 
 export function injectHyprlandFile() {
