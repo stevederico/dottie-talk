@@ -45,6 +45,7 @@ describe('renderKeysLua', () => {
     assert.match(lua, /Start dictation \(push-to-talk\)/);
     assert.match(lua, /Stop dictation \(push-to-talk\)/);
     assert.match(lua, /release = true/);
+    assert.match(lua, /hl\.unbind\('ESCAPE'\)\no\.bind\('ESCAPE', "Stop speak"/);
     assert.match(lua, /setsid -f /);
     assert.equal(lua.includes('wl-paste'), false);
     assert.equal(lua.includes('hyprctl'), false);

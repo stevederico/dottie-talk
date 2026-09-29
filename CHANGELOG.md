@@ -1,3 +1,7 @@
+0.9.2
+
+  Fix duplicate Escape
+
 0.9.1
 
   Fix koko TTS hang

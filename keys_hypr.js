@@ -91,6 +91,7 @@ export function renderKeysLua({
     lines.push(`o.bind(${luaQuote(dictate)}, "Toggle dictation", "setsid -f " .. ${luaQuote(dictateBin)})`);
   }
   if (stop && stopBin) {
+    lines.push(`hl.unbind(${luaQuote(stop)})`);
     lines.push(`o.bind(${luaQuote(stop)}, "Stop speak", function()`);
     lines.push('  local runtime = os.getenv("XDG_RUNTIME_DIR") or "/tmp"');
     lines.push('  local active = io.open(runtime .. "/speak.active", "r")');
