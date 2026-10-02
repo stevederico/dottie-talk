@@ -1,3 +1,7 @@
+0.10.0
+
+  Sync npm lockfile
+
 0.9.3
 
   Skip unchanged keys write
