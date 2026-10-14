@@ -52,28 +52,56 @@ Linux: if `voxtype` is already on PATH, talk uses it. If not, first start downlo
 | `speak` | `out` | saves the file; `play: true` also plays it |
 | `speak` | `returnAudio: true` | base64 too (old behavior, for apps) |
 
-Streaming needs a player that reads stdin: `pw-cat`, `pacat`, `aplay`, or `ffplay`.
+Streaming needs a player that reads stdin: `pw-cat`, `pacat`, `aplay`, or `ffplay`. The first one on PATH wins (`pw-cat` runs with `--raw`).
+
+Add to Claude Code:
+
+```bash
+claude mcp add dottie-talk -s user -- node ~/Projects/dottie-talk/mcp.js
+```
 
 ## Speak-back (Claude Code)
 
-Read Claude's replies aloud. `speak-back.js` is a Stop hook plus a `/speak` skill.
+Read Claude's replies aloud through koko. `speak-back.js` runs as two Claude Code hooks, and `skills/` has the `/speak` and `/speak-toggle` skills.
 
 | Command | What |
 |---|---|
 | `/speak` | speak this session's last reply, one time |
+| `/speak on` / `off` / `toggle` | speak-back mode: read every reply aloud |
 | `/speak-toggle` | same as `/speak toggle` |
-| `/speak on` / `off` / `toggle` | read every reply aloud |
 | `/speak stop` | stop playback |
 | `/speak status` | on or off |
-| type anything | cuts playback off (`UserPromptSubmit` → `speak-back.js interrupt`) |
 
-Hook (`~/.claude/settings.json`, `Stop`):
+Stop it: type anything (the next prompt cuts playback off), `/speak stop`, or `/speak off`. On Linux with `dottie-talk keys on`, Escape stops it too.
 
-```bash
-node ~/Projects/dottie-talk/speak-back.js hook
-```
+What is read: only the final reply. Never thinking, tool calls, or notes written between tool calls. Code blocks, tables, URLs, and markdown marks are dropped.
 
-Only the final reply is read: never thinking, tool calls, or mid-turn notes. Code blocks, tables, and URLs are skipped. State lives in `~/.config/dottie-talk/speak-back/`. Saved replies are per session; the on/off mode is global.
+State: `~/.config/dottie-talk/speak-back/`. The saved last reply is per session (`last-<session>.txt`), so two windows never read each other's reply. The on/off mode is global.
+
+### Setup
+
+1. Start dottie-talk (`npm start`), so koko answers on `:1314`
+2. Link the skills:
+
+   ```bash
+   ln -s ~/Projects/dottie-talk/skills/speak ~/.claude/skills/speak
+   ln -s ~/Projects/dottie-talk/skills/speak-toggle ~/.claude/skills/speak-toggle
+   ```
+
+3. Add the hooks to `~/.claude/settings.json`:
+
+   ```json
+   {
+     "hooks": {
+       "Stop": [{ "hooks": [{ "type": "command", "command": "node ~/Projects/dottie-talk/speak-back.js hook", "timeout": 5 }] }],
+       "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node ~/Projects/dottie-talk/speak-back.js interrupt", "timeout": 5 }] }]
+     }
+   }
+   ```
+
+4. Restart Claude Code, then `/speak on`
+
+The Stop hook saves every reply and speaks it only when the mode is on. It returns at once; playback runs in a detached child. The `interrupt` hook prints nothing, because `UserPromptSubmit` output goes into the model's context.
 
 ## Keys (Linux)
 

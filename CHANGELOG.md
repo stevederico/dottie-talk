@@ -1,3 +1,9 @@
+0.17.0
+
+  Ship speak skills
+  Document speak-back setup
+  Document MCP install
+
 0.16.0
 
   Fix Linux streaming
