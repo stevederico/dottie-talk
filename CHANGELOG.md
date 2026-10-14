@@ -1,3 +1,9 @@
+0.13.0
+
+  Add speak-back hook
+  Add speak last
+  Add speak-back tests
+
 0.12.0
 
   Fix false wedge

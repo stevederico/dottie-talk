@@ -1,0 +1,196 @@
+#!/usr/bin/env node
+/**
+ * Claude Code speak-back: read assistant replies aloud through koko.
+ *
+ *   node speak-back.js hook     Stop hook. Saves the reply; speaks it when on.
+ *   node speak-back.js last     Speak the last saved reply.
+ *   node speak-back.js on|off   Toggle speak-back.
+ *   node speak-back.js stop     Stop playback.
+ *   node speak-back.js status   Print on/off.
+ */
+
+import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const STATE_DIR = process.env.DOTTIE_TALK_SPEAK_BACK_DIR
+  || path.join(os.homedir(), '.config', 'dottie-talk', 'speak-back');
+const flagPath = () => path.join(STATE_DIR, 'on');
+const lastPath = () => path.join(STATE_DIR, 'last.txt');
+// Set by `last` / `stop`. The next Stop is that command's own reply: the hook
+// must not save it over the real reply or talk over playback.
+const skipPath = () => path.join(STATE_DIR, 'skip-next');
+
+export function isOn() {
+  return existsSync(flagPath());
+}
+
+export function setOn(on) {
+  mkdirSync(STATE_DIR, { recursive: true });
+  if (on) writeFileSync(flagPath(), '');
+  else try { unlinkSync(flagPath()); } catch { /* ok */ }
+}
+
+function consumeSkip() {
+  if (!existsSync(skipPath())) return false;
+  try { unlinkSync(skipPath()); } catch { /* ok */ }
+  return true;
+}
+
+function markSkip() {
+  mkdirSync(STATE_DIR, { recursive: true });
+  writeFileSync(skipPath(), '');
+}
+
+/** Markdown reply → plain sentences worth hearing. */
+export function speakable(md) {
+  return String(md || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .split('\n')
+    .filter((line) => !/^\s*\|/.test(line))
+    .map((line) => line
+      .replace(/^\s*#{1,6}\s+/, '')
+      .replace(/^\s*>\s?/, '')
+      .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, ''))
+    .join('\n')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/`([^`]*)`/g, '$1')
+    // Asterisks only: underscores live inside snake_case names.
+    .replace(/(\*\*|\*|~~)(\S(?:.*?\S)?)\1/g, '$2')
+    .split('\n')
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+function isPrompt(entry) {
+  if (entry.type !== 'user' || entry.isMeta) return false;
+  const c = entry.message?.content;
+  if (typeof c === 'string') return true;
+  return Array.isArray(c) && c.some((b) => b.type === 'text');
+}
+
+/** Last assistant text since the last real user prompt, from a transcript JSONL. */
+export function lastReplyFromTranscript(jsonl) {
+  const lines = String(jsonl).split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let entry;
+    try { entry = JSON.parse(lines[i]); } catch { continue; }
+    if (isPrompt(entry)) return '';
+    if (entry.type !== 'assistant') continue;
+    const text = (entry.message?.content || [])
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text)
+      .join('\n')
+      .trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+/** Speak in a detached child so the hook returns at once. */
+function speakDetached(text) {
+  const self = fileURLToPath(import.meta.url);
+  const child = spawn(process.execPath, [self, 'say'], {
+    detached: true,
+    stdio: ['pipe', 'ignore', 'ignore'],
+  });
+  child.stdin.end(text);
+  child.unref();
+}
+
+async function say(text) {
+  const { speakStream } = await import('./core.js');
+  const { playPcmStream, stopSpeak } = await import('./keys.js');
+  stopSpeak();
+  const result = await speakStream({ text });
+  if (result.error) {
+    process.stderr.write(`${result.error}\n`);
+    return 1;
+  }
+  const played = playPcmStream(result.body);
+  if (played.error) {
+    process.stderr.write(`${played.error}\n`);
+    return 1;
+  }
+  await played.done;
+  return 0;
+}
+
+async function readStdin() {
+  let data = '';
+  for await (const chunk of process.stdin) data += chunk;
+  return data;
+}
+
+export async function hook(input) {
+  let reply = typeof input.last_assistant_message === 'string' ? input.last_assistant_message : '';
+  if (!reply && input.transcript_path) {
+    try { reply = lastReplyFromTranscript(readFileSync(input.transcript_path, 'utf8')); } catch { /* ok */ }
+  }
+  // The /speak turn's own reply: keep the saved reply, stay quiet.
+  if (consumeSkip()) return { spoke: false };
+  const text = speakable(reply);
+  if (!text) return { spoke: false };
+  mkdirSync(STATE_DIR, { recursive: true });
+  writeFileSync(lastPath(), text);
+  if (!isOn()) return { spoke: false };
+  speakDetached(text);
+  return { spoke: true };
+}
+
+async function main(cmd) {
+  switch (cmd) {
+    case 'hook': {
+      let input = {};
+      try { input = JSON.parse(await readStdin() || '{}'); } catch { /* ok */ }
+      await hook(input);
+      return 0;
+    }
+    case 'say':
+      return say(await readStdin());
+    case 'last': {
+      let text = '';
+      try { text = readFileSync(lastPath(), 'utf8'); } catch { /* ok */ }
+      if (!text.trim()) {
+        console.log('no saved reply yet');
+        return 1;
+      }
+      markSkip();
+      speakDetached(text);
+      console.log('speaking last reply');
+      return 0;
+    }
+    case 'on':
+      setOn(true);
+      console.log('speak-back on');
+      return 0;
+    case 'off': {
+      setOn(false);
+      const { stopSpeak } = await import('./keys.js');
+      stopSpeak();
+      console.log('speak-back off');
+      return 0;
+    }
+    case 'stop': {
+      const { stopSpeak } = await import('./keys.js');
+      markSkip();
+      console.log(stopSpeak().stopped ? 'stopped' : 'nothing playing');
+      return 0;
+    }
+    case 'toggle':
+      return main(isOn() ? 'off' : 'on');
+    case 'status':
+      console.log(`speak-back ${isOn() ? 'on' : 'off'}`);
+      return 0;
+    default:
+      console.log('usage: speak-back.js hook|last|on|off|toggle|stop|status');
+      return 1;
+  }
+}
+
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) process.exitCode = await main(process.argv[2]);

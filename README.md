@@ -54,6 +54,25 @@ Linux: if `voxtype` is already on PATH, talk uses it. If not, first start downlo
 
 Streaming needs a player that reads stdin: `pw-cat`, `pacat`, `aplay`, or `ffplay`.
 
+## Speak-back (Claude Code)
+
+Read Claude's replies aloud. `speak-back.js` is a Stop hook plus a `/speak` skill.
+
+| Command | What |
+|---|---|
+| `/speak` | speak the last reply |
+| `/speak on` / `off` / `toggle` | read every reply aloud |
+| `/speak stop` | stop playback |
+| `/speak status` | on or off |
+
+Hook (`~/.claude/settings.json`, `Stop`):
+
+```bash
+node ~/Projects/dottie-talk/speak-back.js hook
+```
+
+Code blocks, tables, and URLs are skipped. State lives in `~/.config/dottie-talk/speak-back/`.
+
 ## Keys (Linux)
 
 Talk-keys analog. **Off by default.** Enable, then keep `npm start` running so binds arm:
