@@ -6,6 +6,7 @@
  *   node speak-back.js last     Speak the last saved reply.
  *   node speak-back.js on|off   Toggle speak-back.
  *   node speak-back.js stop     Stop playback.
+ *   node speak-back.js interrupt  UserPromptSubmit hook. Typing cuts playback off.
  *   node speak-back.js status   Print on/off.
  */
 
@@ -73,15 +74,23 @@ function isPrompt(entry) {
   return Array.isArray(c) && c.some((b) => b.type === 'text');
 }
 
-/** Last assistant text since the last real user prompt, from a transcript JSONL. */
+const hasBlock = (entry, type) => Array.isArray(entry.message?.content)
+  && entry.message.content.some((b) => b.type === type);
+
+/**
+ * The final reply only, from a transcript JSONL. Thinking is never text.
+ * Text before a tool call is mid-turn narration, so hitting a tool call
+ * before any text means the final reply is not written yet: return ''.
+ */
 export function lastReplyFromTranscript(jsonl) {
   const lines = String(jsonl).split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     let entry;
     try { entry = JSON.parse(lines[i]); } catch { continue; }
     if (isPrompt(entry)) return '';
+    if (hasBlock(entry, 'tool_result') || hasBlock(entry, 'tool_use')) return '';
     if (entry.type !== 'assistant') continue;
-    const text = (entry.message?.content || [])
+    const text = entry.message.content
       .filter((b) => b.type === 'text')
       .map((b) => b.text)
       .join('\n')
@@ -179,6 +188,12 @@ async function main(cmd) {
       const { stopSpeak } = await import('./keys.js');
       markSkip();
       console.log(stopSpeak().stopped ? 'stopped' : 'nothing playing');
+      return 0;
+    }
+    case 'interrupt': {
+      // Silent: UserPromptSubmit stdout lands in the model's context.
+      const { isSpeaking, stopSpeak } = await import('./keys.js');
+      if (isSpeaking()) stopSpeak();
       return 0;
     }
     case 'toggle':

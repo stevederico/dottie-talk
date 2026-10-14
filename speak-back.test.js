@@ -41,10 +41,26 @@ describe('lastReplyFromTranscript', () => {
       line({ type: 'user', message: { content: 'new prompt' } }),
       line({ type: 'assistant', message: { content: [{ type: 'tool_use' }] } }),
       line({ type: 'user', message: { content: [{ type: 'tool_result' }] } }),
+      line({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: 'x' }] } }),
       line({ type: 'assistant', message: { content: [{ type: 'text', text: 'new reply' }] } }),
       line({ type: 'attachment' }),
     ].join('\n');
     assert.equal(lastReplyFromTranscript(jsonl), 'new reply');
+  });
+
+  it('never speaks thinking or mid-turn narration', () => {
+    const jsonl = [
+      line({ type: 'user', message: { content: 'prompt' } }),
+      line({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: 'plan' }] } }),
+      line({ type: 'assistant', message: { content: [{ type: 'text', text: 'Checking files.' }, { type: 'tool_use' }] } }),
+      line({ type: 'user', message: { content: [{ type: 'tool_result' }] } }),
+      line({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: 'more plan' }] } }),
+      line({ type: 'assistant', message: { content: [{ type: 'text', text: 'Final answer.' }] } }),
+    ].join('\n');
+    assert.equal(lastReplyFromTranscript(jsonl), 'Final answer.');
+    // Final reply not flushed yet: stay quiet rather than read narration.
+    const unflushed = jsonl.split('\n').slice(0, -1).join('\n');
+    assert.equal(lastReplyFromTranscript(unflushed), '');
   });
 
   it('does not reach back past the last prompt', () => {

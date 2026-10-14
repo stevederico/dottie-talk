@@ -1,3 +1,8 @@
+0.14.0
+
+  Speak final reply
+  Add typing interrupt
+
 0.13.0
 
   Add speak-back hook
