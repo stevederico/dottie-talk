@@ -192,9 +192,10 @@ function pcmPlayerCommands({ sampleRate, channels }) {
   const rate = String(sampleRate);
   const ch = String(channels);
   return [
-    ['pw-cat', '--playback', '--format', 's16', '--rate', rate, '--channels', ch, '-'],
+    // --raw: without it pw-cat hands stdin to libsndfile, which rejects headerless PCM.
+    ['pw-cat', '--playback', '--raw', '--format', 's16', '--rate', rate, '--channels', ch, '-'],
     ['pacat', '--format=s16le', `--rate=${rate}`, `--channels=${ch}`],
-    ['aplay', '-q', '-f', 'S16_LE', '-r', rate, '-c', ch],
+    ['aplay', '-q', '-t', 'raw', '-f', 'S16_LE', '-r', rate, '-c', ch],
     ['ffplay', '-v', 'error', '-nodisp', '-autoexit', '-f', 's16le', '-ar', rate,
       '-ch_layout', channels === 1 ? 'mono' : 'stereo', '-i', '-'],
   ];

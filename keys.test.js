@@ -275,6 +275,17 @@ describe('playPcmStream', () => {
     assert.deepEqual([...Buffer.concat(chunks)], [1, 2, 3]);
   });
 
+  it('runs pw-cat in raw mode', () => {
+    restore = isolate();
+    let spawned;
+    playPcmStream(new ReadableStream({ start(c) { c.close(); } }), {
+      whichFn: (bin) => bin === 'pw-cat',
+      spawnFn: (bin, args) => { spawned = { bin, args }; return { pid: 6, stdin: new PassThrough(), on() {} }; },
+    });
+    assert.equal(spawned.bin, 'pw-cat');
+    assert.ok(spawned.args.includes('--raw'));
+  });
+
   it('errors when no streaming player exists', () => {
     restore = isolate();
     const r = playPcmStream(new ReadableStream(), { whichFn: () => false });

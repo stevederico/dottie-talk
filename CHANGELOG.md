@@ -1,3 +1,8 @@
+0.16.0
+
+  Fix Linux streaming
+  Add pw-cat raw
+
 0.15.0
 
   Fix cross-session replies
