@@ -1,3 +1,9 @@
+0.12.0
+
+  Fix false wedge
+  Retry TTS probe
+  Add ttsState tests
+
 0.11.0
 
   Stream MCP speak

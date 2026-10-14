@@ -11,6 +11,7 @@ import {
 import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
 import path from 'node:path';
+import net from 'node:net';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { PORTS } from './ports.js';
@@ -417,12 +418,46 @@ function killWedgedTts() {
   } catch { /* none running */ }
 }
 
+function portOpen(port, timeoutMs = 500) {
+  return new Promise((resolve) => {
+    const sock = net.connect({ port, host: '127.0.0.1' });
+    const done = (open) => { sock.destroy(); resolve(open); };
+    sock.setTimeout(timeoutMs, () => done(false));
+    sock.once('connect', () => done(true));
+    sock.once('error', () => done(false));
+  });
+}
+
+/**
+ * 'up' answers, 'down' nothing listening, 'wedged' listening but silent
+ * across every retry. One slow probe is not a wedge.
+ * @returns {Promise<'up'|'down'|'wedged'>}
+ */
+export async function ttsState({
+  healthFn = healthOk,
+  portOpenFn = portOpen,
+  retries = 3,
+  retryDelayMs = 500,
+} = {}) {
+  const url = `http://127.0.0.1:${PORTS.TTS_PORT}/`;
+  if (await healthFn(url)) return 'up';
+  if (!(await portOpenFn(PORTS.TTS_PORT))) return 'down';
+  for (let i = 0; i < retries; i++) {
+    await new Promise((r) => setTimeout(r, retryDelayMs));
+    if (await healthFn(url, 2000)) return 'up';
+  }
+  return 'wedged';
+}
+
 async function spawnTts() {
-  if (await healthOk(`http://127.0.0.1:${PORTS.TTS_PORT}/`)) return true;
-  log('TTS not answering — killing wedged koko');
-  killWedgedTts();
-  await new Promise((r) => setTimeout(r, 250));
-  if (await healthOk(`http://127.0.0.1:${PORTS.TTS_PORT}/`)) return true;
+  const state = await ttsState();
+  if (state === 'up') return true;
+  if (state === 'wedged') {
+    log('TTS not answering — killing wedged koko');
+    killWedgedTts();
+    await new Promise((r) => setTimeout(r, 250));
+    if (await healthOk(`http://127.0.0.1:${PORTS.TTS_PORT}/`)) return true;
+  }
   const bin = resolveKokoBin();
   if (!bin) throw new Error(`koko not found — run: npm run install:bins`);
   const kokoDataDir = await ensureKokoModels();

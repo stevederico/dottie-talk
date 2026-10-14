@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { dirHasRequiredBins, isNativeBin, kokoCandidates, voxtypeFetchSpec } from './bin_supervise.js';
+import {
+  dirHasRequiredBins, isNativeBin, kokoCandidates, ttsState, voxtypeFetchSpec,
+} from './bin_supervise.js';
 
 describe('isNativeBin', () => {
   it('accepts ELF on Linux', () => {
@@ -58,5 +60,34 @@ describe('kokoCandidates', () => {
     } else {
       assert.deepEqual(names, ['koko']);
     }
+  });
+});
+
+describe('ttsState', () => {
+  const fast = { retryDelayMs: 0 };
+
+  it('is up when koko answers', async () => {
+    const r = await ttsState({ ...fast, healthFn: async () => true, portOpenFn: async () => { throw new Error('no probe'); } });
+    assert.equal(r, 'up');
+  });
+
+  it('is down, not wedged, when nothing listens', async () => {
+    const r = await ttsState({ ...fast, healthFn: async () => false, portOpenFn: async () => false });
+    assert.equal(r, 'down');
+  });
+
+  it('is up when a retry answers after one slow probe', async () => {
+    let calls = 0;
+    const r = await ttsState({ ...fast, healthFn: async () => ++calls > 1, portOpenFn: async () => true });
+    assert.equal(r, 'up');
+  });
+
+  it('is wedged only after every retry fails', async () => {
+    let calls = 0;
+    const r = await ttsState({
+      ...fast, retries: 3, healthFn: async () => { calls++; return false; }, portOpenFn: async () => true,
+    });
+    assert.equal(r, 'wedged');
+    assert.equal(calls, 4);
   });
 });
