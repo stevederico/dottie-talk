@@ -151,4 +151,43 @@ export async function speak({ text, voice, fetchFn = globalThis.fetch } = {}) {
   }
 }
 
-export const TALK_PORTS = { STT: PORTS.STT_PORT, TTS: PORTS.TTS_PORT, HTTP: PORTS.TALK_HTTP_PORT };
+/** koko `stream: true` sends raw PCM: s16le, 24 kHz, mono. */
+export const PCM_FORMAT = { sampleRate: 24000, channels: 1, encoding: 's16le' };
+
+/**
+ * Start TTS and return the PCM body as it arrives, so playback starts on the
+ * first chunk instead of after the whole clip.
+ * @param {object} opts
+ * @param {string} opts.text
+ * @param {string} [opts.voice]
+ * @param {typeof fetch} [opts.fetchFn]
+ * @returns {Promise<{ body: ReadableStream<Uint8Array> }|{ error: string }>}
+ */
+export async function speakStream({ text, voice, fetchFn = globalThis.fetch } = {}) {
+  if (typeof text !== 'string' || !text.trim()) {
+    return { error: 'text (string) required' };
+  }
+  const body = { input: text.trim(), model: 'kokoro', stream: true };
+  if (voice) body.voice = voice;
+
+  try {
+    const res = await fetchFn(`${TTS}/v1/audio/speech`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      return { error: `TTS ${res.status}: ${(await res.text()).slice(0, 300)}` };
+    }
+    return { body: res.body };
+  } catch (err) {
+    const gone = err.cause?.code === 'ECONNREFUSED' || /fetch failed/i.test(err.message);
+    return {
+      error: gone
+        ? `koko not running on :${PORTS.TTS_PORT} — run: npm start`
+        : err.message,
+    };
+  }
+}
+
+export const TALK_PORTS ={ STT: PORTS.STT_PORT, TTS: PORTS.TTS_PORT, HTTP: PORTS.TALK_HTTP_PORT };

@@ -41,6 +41,19 @@ Node ≥22. Override STT with `DOTTIE_STT=voxtype` or `DOTTIE_STT=parakeet`.
 
 Linux: if `voxtype` is already on PATH, talk uses it. If not, first start downloads the x86_64 AVX2 binary into `~/.cache/dottie-talk/bin` and `base.en` (no sudo, no pacman). `npm start` skips the Darwin `bin/koko` and downloads the linux-bins ELF the same way. Streaming/multipart STT needs parakeet — buffered JSON `/v1/audio/transcriptions` works on both.
 
+## MCP
+
+`npm run mcp` (stdio). Audio stays on disk or goes to the speakers, so agent context never fills with base64.
+
+| Tool | Args | Returns |
+|---|---|---|
+| `transcribe` | `path` (or `wavBase64` for apps) | text |
+| `speak` | `text`, `voice?` | streams PCM to the speakers; starts in ~20 ms, not after the whole clip |
+| `speak` | `out` | saves the file; `play: true` also plays it |
+| `speak` | `returnAudio: true` | base64 too (old behavior, for apps) |
+
+Streaming needs a player that reads stdin: `pw-cat`, `pacat`, `aplay`, or `ffplay`.
+
 ## Keys (Linux)
 
 Talk-keys analog. **Off by default.** Enable, then keep `npm start` running so binds arm:

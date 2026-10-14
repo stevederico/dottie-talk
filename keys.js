@@ -7,8 +7,10 @@ import { execFile, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
-import { speak } from './core.js';
+import { PCM_FORMAT, speak } from './core.js';
 import { ensureTtsRunning } from './bin_supervise.js';
 import { loadConfig } from './config.js';
 
@@ -163,6 +165,63 @@ function whichPlayer(whichFn) {
   return '';
 }
 
+/**
+ * Write WAV to a temp file and play it in the background.
+ * Escape / stopSpeak can kill it like a hotkey speak.
+ * @returns {{ pid: number, wavPath: string }|{ error: string }}
+ */
+export function playWav(wav, { spawnFn = spawn, whichFn = binOnPath } = {}) {
+  const bin = whichPlayer(whichFn);
+  if (!bin) return { error: 'no audio player (pw-play, paplay, afplay, mpv, ffplay)' };
+
+  const dir = path.join(tmpdir(), 'dottie-talk-keys');
+  mkdirSync(dir, { recursive: true });
+  // Unique path: a second speak must not truncate the file pw-play is reading.
+  const wavPath = path.join(dir, `speech-${process.pid}-${Date.now()}.wav`);
+  writeFileSync(wavPath, wav);
+
+  const args = playerCommands(wavPath).find((c) => c[0] === bin).slice(1);
+  const child = spawnFn(bin, args, { stdio: 'ignore', detached: true });
+  child.unref?.();
+  markSpeaking(child.pid);
+  child.on?.('exit', () => clearSpeaking());
+  return { pid: child.pid, wavPath };
+}
+
+function pcmPlayerCommands({ sampleRate, channels }) {
+  const rate = String(sampleRate);
+  const ch = String(channels);
+  return [
+    ['pw-cat', '--playback', '--format', 's16', '--rate', rate, '--channels', ch, '-'],
+    ['pacat', '--format=s16le', `--rate=${rate}`, `--channels=${ch}`],
+    ['aplay', '-q', '-f', 'S16_LE', '-r', rate, '-c', ch],
+    ['ffplay', '-v', 'error', '-nodisp', '-autoexit', '-f', 's16le', '-ar', rate,
+      '-ch_layout', channels === 1 ? 'mono' : 'stereo', '-i', '-'],
+  ];
+}
+
+/**
+ * Pipe raw PCM into a player that reads stdin. Playback starts on the first chunk.
+ * @param {ReadableStream<Uint8Array>} body
+ * @returns {{ pid: number, done: Promise<void> }|{ error: string }}
+ */
+export function playPcmStream(body, {
+  format = PCM_FORMAT,
+  spawnFn = spawn,
+  whichFn = binOnPath,
+} = {}) {
+  const cmd = pcmPlayerCommands(format).find((c) => whichFn(c[0]));
+  if (!cmd) return { error: 'no streaming audio player (pw-cat, pacat, aplay, ffplay)' };
+
+  const child = spawnFn(cmd[0], cmd.slice(1), { stdio: ['pipe', 'ignore', 'ignore'] });
+  markSpeaking(child.pid);
+  child.on?.('exit', () => clearSpeaking());
+  // Player killed by Escape closes stdin; swallow EPIPE.
+  child.stdin.on?.('error', () => {});
+  const done = pipeline(Readable.fromWeb(body), child.stdin).catch(() => {});
+  return { pid: child.pid, done };
+}
+
 export function markSpeaking(pid) {
   writeFileSync(speakActivePath(), `${pid}\n`);
   mkdirSync(path.dirname(speakPidPath()), { recursive: true });
@@ -249,29 +308,17 @@ export async function speakSelection({
       return { error: result.error };
     }
 
-    const dir = path.join(tmpdir(), 'dottie-talk-keys');
-    mkdirSync(dir, { recursive: true });
-    // Unique path: a second speak must not truncate the file pw-play is reading.
-    const wavPath = path.join(dir, `speech-${process.pid}-${Date.now()}.wav`);
-    writeFileSync(wavPath, Buffer.from(result.audioBase64, 'base64'));
-
-    const bin = whichPlayer(whichFn);
-    if (!bin) {
-      const error = 'no audio player (pw-play, paplay, mpv, ffplay)';
-      notifyFn(error);
-      return { error };
+    const played = playWav(Buffer.from(result.audioBase64, 'base64'), { spawnFn, whichFn });
+    if (played.error) {
+      notifyFn(played.error);
+      return { error: played.error };
     }
-    const args = playerCommands(wavPath).find((c) => c[0] === bin).slice(1);
-    const child = spawnFn(bin, args, { stdio: 'ignore', detached: true });
-    child.unref?.();
-    markSpeaking(child.pid);
-    child.on?.('exit', () => clearSpeaking());
     // Drop primary after using it so the next Alt+S falls through to clipboard
     // when nothing is newly selected (Wayland primary otherwise stays stale).
     if (source === 'primary') {
       clearPrimarySelection({ execFileFn }).catch(() => {});
     }
-    return { text, source, pid: child.pid };
+    return { text, source, pid: played.pid };
   } finally {
     clearProcessing();
   }

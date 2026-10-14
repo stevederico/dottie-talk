@@ -1,3 +1,11 @@
+0.11.0
+
+  Stream MCP speak
+  Add transcribe path
+  Add speak out
+  Gate base64 audio
+  Add MCP tests
+
 0.10.0
 
   Sync npm lockfile

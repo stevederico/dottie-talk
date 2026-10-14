@@ -13,12 +13,14 @@ import {
   markProcessing,
   markSpeaking,
   pickText,
+  playPcmStream,
   readSelection,
   speakSelection,
   stopSpeak,
   writeKeysFlag,
 } from './keys.js';
 import { saveConfig } from './config.js';
+import { PassThrough } from 'node:stream';
 
 function isolate() {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'dottie-talk-keys-'));
@@ -245,5 +247,37 @@ describe('dictate', () => {
       },
     });
     assert.equal(stop.mode, 'stop');
+  });
+});
+
+describe('playPcmStream', () => {
+  let restore;
+  afterEach(() => restore?.());
+
+  it('pipes PCM chunks into the first player found', async () => {
+    restore = isolate();
+    const stdin = new PassThrough();
+    const chunks = [];
+    stdin.on('data', (c) => chunks.push(c));
+    let spawned;
+    const body = new ReadableStream({
+      start(c) { c.enqueue(new Uint8Array([1, 2])); c.enqueue(new Uint8Array([3])); c.close(); },
+    });
+    const r = playPcmStream(body, {
+      whichFn: (bin) => bin === 'ffplay',
+      spawnFn: (bin, args) => { spawned = { bin, args }; return { pid: 5, stdin, on() {} }; },
+    });
+    await r.done;
+    assert.equal(r.pid, 5);
+    assert.equal(spawned.bin, 'ffplay');
+    assert.ok(spawned.args.includes('s16le'));
+    assert.ok(spawned.args.includes('24000'));
+    assert.deepEqual([...Buffer.concat(chunks)], [1, 2, 3]);
+  });
+
+  it('errors when no streaming player exists', () => {
+    restore = isolate();
+    const r = playPcmStream(new ReadableStream(), { whichFn: () => false });
+    assert.match(r.error, /no streaming audio player/);
   });
 });
