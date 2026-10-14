@@ -1,3 +1,8 @@
+0.15.0
+
+  Fix cross-session replies
+  Key state by session
+
 0.14.0
 
   Speak final reply

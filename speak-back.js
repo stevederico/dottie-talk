@@ -19,10 +19,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const STATE_DIR = process.env.DOTTIE_TALK_SPEAK_BACK_DIR
   || path.join(os.homedir(), '.config', 'dottie-talk', 'speak-back');
 const flagPath = () => path.join(STATE_DIR, 'on');
-const lastPath = () => path.join(STATE_DIR, 'last.txt');
+// Per session: two Claude Code windows must not read each other's replies.
+// The hook gets session_id on stdin; /speak's Bash gets CLAUDE_CODE_SESSION_ID.
+const sid = (id) => String(id || process.env.CLAUDE_CODE_SESSION_ID || 'default').replace(/[^\w-]/g, '');
+const lastPath = (id) => path.join(STATE_DIR, `last-${sid(id)}.txt`);
 // Set by `last` / `stop`. The next Stop is that command's own reply: the hook
 // must not save it over the real reply or talk over playback.
-const skipPath = () => path.join(STATE_DIR, 'skip-next');
+const skipPath = (id) => path.join(STATE_DIR, `skip-${sid(id)}`);
 
 export function isOn() {
   return existsSync(flagPath());
@@ -34,15 +37,15 @@ export function setOn(on) {
   else try { unlinkSync(flagPath()); } catch { /* ok */ }
 }
 
-function consumeSkip() {
-  if (!existsSync(skipPath())) return false;
-  try { unlinkSync(skipPath()); } catch { /* ok */ }
+function consumeSkip(id) {
+  if (!existsSync(skipPath(id))) return false;
+  try { unlinkSync(skipPath(id)); } catch { /* ok */ }
   return true;
 }
 
-function markSkip() {
+function markSkip(id) {
   mkdirSync(STATE_DIR, { recursive: true });
-  writeFileSync(skipPath(), '');
+  writeFileSync(skipPath(id), '');
 }
 
 /** Markdown reply → plain sentences worth hearing. */
@@ -141,11 +144,11 @@ export async function hook(input) {
     try { reply = lastReplyFromTranscript(readFileSync(input.transcript_path, 'utf8')); } catch { /* ok */ }
   }
   // The /speak turn's own reply: keep the saved reply, stay quiet.
-  if (consumeSkip()) return { spoke: false };
+  if (consumeSkip(input.session_id)) return { spoke: false };
   const text = speakable(reply);
   if (!text) return { spoke: false };
   mkdirSync(STATE_DIR, { recursive: true });
-  writeFileSync(lastPath(), text);
+  writeFileSync(lastPath(input.session_id), text);
   if (!isOn()) return { spoke: false };
   speakDetached(text);
   return { spoke: true };

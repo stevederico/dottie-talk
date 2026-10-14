@@ -60,7 +60,8 @@ Read Claude's replies aloud. `speak-back.js` is a Stop hook plus a `/speak` skil
 
 | Command | What |
 |---|---|
-| `/speak` | speak the last reply |
+| `/speak` | speak this session's last reply, one time |
+| `/speak-toggle` | same as `/speak toggle` |
 | `/speak on` / `off` / `toggle` | read every reply aloud |
 | `/speak stop` | stop playback |
 | `/speak status` | on or off |
@@ -72,7 +73,7 @@ Hook (`~/.claude/settings.json`, `Stop`):
 node ~/Projects/dottie-talk/speak-back.js hook
 ```
 
-Only the final reply is read: never thinking, tool calls, or mid-turn notes. Code blocks, tables, and URLs are skipped. State lives in `~/.config/dottie-talk/speak-back/`.
+Only the final reply is read: never thinking, tool calls, or mid-turn notes. Code blocks, tables, and URLs are skipped. State lives in `~/.config/dottie-talk/speak-back/`. Saved replies are per session; the on/off mode is global.
 
 ## Keys (Linux)
 

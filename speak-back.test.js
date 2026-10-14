@@ -6,6 +6,7 @@ import path from 'node:path';
 
 const dir = mkdtempSync(path.join(os.tmpdir(), 'dottie-speak-back-'));
 process.env.DOTTIE_TALK_SPEAK_BACK_DIR = dir;
+process.env.CLAUDE_CODE_SESSION_ID = 'sess-a';
 const { hook, isOn, lastReplyFromTranscript, setOn, speakable } = await import('./speak-back.js');
 
 after(() => rmSync(dir, { recursive: true, force: true }));
@@ -78,23 +79,29 @@ describe('hook', () => {
     setOn(false);
     const r = await hook({ last_assistant_message: '**Done**' });
     assert.equal(r.spoke, false);
-    assert.equal(readFileSync(path.join(dir, 'last.txt'), 'utf8'), 'Done');
+    assert.equal(readFileSync(path.join(dir, 'last-sess-a.txt'), 'utf8'), 'Done');
   });
 
   it('falls back to the transcript', async () => {
     const t = path.join(dir, 't.jsonl');
     writeFileSync(t, line({ type: 'assistant', message: { content: [{ type: 'text', text: 'From file' }] } }));
     await hook({ transcript_path: t });
-    assert.equal(readFileSync(path.join(dir, 'last.txt'), 'utf8'), 'From file');
+    assert.equal(readFileSync(path.join(dir, 'last-sess-a.txt'), 'utf8'), 'From file');
   });
 
   it('skip marker keeps the saved reply and stays quiet', async () => {
     setOn(true);
-    writeFileSync(path.join(dir, 'skip-next'), '');
+    writeFileSync(path.join(dir, 'skip-sess-a'), '');
     const r = await hook({ last_assistant_message: 'Speaking last reply.' });
     assert.equal(r.spoke, false);
-    assert.equal(readFileSync(path.join(dir, 'last.txt'), 'utf8'), 'From file');
+    assert.equal(readFileSync(path.join(dir, 'last-sess-a.txt'), 'utf8'), 'From file');
     setOn(false);
     assert.equal(isOn(), false);
+  });
+
+  it('keeps each session\'s reply separate', async () => {
+    await hook({ session_id: 'sess-b', last_assistant_message: 'Other window' });
+    assert.equal(readFileSync(path.join(dir, 'last-sess-b.txt'), 'utf8'), 'Other window');
+    assert.equal(readFileSync(path.join(dir, 'last-sess-a.txt'), 'utf8'), 'From file');
   });
 });
