@@ -4,8 +4,23 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  dirHasRequiredBins, isNativeBin, kokoCandidates, ttsState, voxtypeFetchSpec,
+  dirHasRequiredBins, isNativeBin, kokoCandidates, kokoEspeakEnv, ttsState, voxtypeFetchSpec,
 } from './bin_supervise.js';
+
+describe('kokoEspeakEnv', () => {
+  it('points koko at the folder that contains espeak-ng-data', () => {
+    const env = kokoEspeakEnv('/Applications/Dottie.app/Contents/Resources/espeak-ng-data');
+    assert.deepEqual(env, {
+      PIPER_ESPEAKNG_DATA_DIRECTORY: '/Applications/Dottie.app/Contents/Resources',
+      ESPEAK_DATA_PATH: '/Applications/Dottie.app/Contents/Resources',
+      ESPEAKNG_DATA_PATH: '/Applications/Dottie.app/Contents/Resources',
+    });
+  });
+
+  it('sets nothing when no espeak-ng-data was found', () => {
+    assert.deepEqual(kokoEspeakEnv(''), {});
+  });
+});
 
 describe('isNativeBin', () => {
   it('accepts ELF on Linux', () => {

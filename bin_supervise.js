@@ -6,7 +6,7 @@
 import { execFileSync, execSync, spawn } from 'node:child_process';
 import {
   chmodSync, createWriteStream, existsSync, readFileSync, statSync, statfsSync, mkdirSync,
-  symlinkSync, lstatSync, unlinkSync, rmSync, readdirSync, renameSync,
+  rmSync, readdirSync, renameSync,
 } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
@@ -269,29 +269,20 @@ function findEspeakData() {
   return '';
 }
 
-let kokoHardcodedEspeakPaths = null;
-function ensureKokoEspeakSymlinks(kokoBin, espeakDataDir) {
-  if (!kokoBin || !espeakDataDir || !existsSync(path.join(espeakDataDir, 'phontab'))) return;
-  if (!kokoHardcodedEspeakPaths) {
-    try {
-      const out = execSync(`strings "${kokoBin}"`, { encoding: 'utf-8', timeout: 5000, maxBuffer: 64 * 1024 * 1024 });
-      const re = /\/[^\s\0]*?espeak-rs-sys-[0-9a-f]+\/out\/share\/espeak-ng-data/g;
-      kokoHardcodedEspeakPaths = Array.from(new Set(out.match(re) || []));
-    } catch {
-      return;
-    }
-  }
-  for (const expected of kokoHardcodedEspeakPaths) {
-    try {
-      if (existsSync(path.join(expected, 'phontab'))) continue;
-      try {
-        const st = lstatSync(expected);
-        if (st.isSymbolicLink() || st.isDirectory()) unlinkSync(expected);
-      } catch { /* ok */ }
-      mkdirSync(path.dirname(expected), { recursive: true });
-      symlinkSync(espeakDataDir, expected);
-    } catch { /* non-fatal */ }
-  }
+/**
+ * Env that points koko at espeak-ng-data. koko (piper-rs / espeak-ng) wants the
+ * folder that CONTAINS espeak-ng-data and appends the name itself. Handing it
+ * espeak-ng-data directly misses, so koko falls back to the Cargo build path
+ * baked into the binary, and on any other machine every clip is ~0.4 s of silence.
+ */
+export function kokoEspeakEnv(espeakDataDir) {
+  if (!espeakDataDir) return {};
+  const parent = path.dirname(espeakDataDir);
+  return {
+    PIPER_ESPEAKNG_DATA_DIRECTORY: parent,
+    ESPEAK_DATA_PATH: parent,
+    ESPEAKNG_DATA_PATH: parent,
+  };
 }
 
 async function healthOk(url, timeoutMs = 800) {
@@ -462,16 +453,13 @@ async function spawnTts() {
   if (!bin) throw new Error(`koko not found — run: npm run install:bins`);
   const kokoDataDir = await ensureKokoModels();
   const espeakDataDir = findEspeakData();
-  ensureKokoEspeakSymlinks(bin, espeakDataDir);
   log(`spawning TTS ${bin}`);
   const proc = spawn(bin, ['openai', '--port', String(PORTS.TTS_PORT), '--ip', '127.0.0.1'], {
     cwd: kokoDataDir,
     env: {
       ...process.env,
       PATH: binPathEnv(),
-      PIPER_ESPEAKNG_DATA_DIRECTORY: espeakDataDir,
-      ESPEAK_DATA_PATH: espeakDataDir,
-      ESPEAKNG_DATA_PATH: espeakDataDir,
+      ...kokoEspeakEnv(espeakDataDir),
     },
     stdio: 'ignore',
   });

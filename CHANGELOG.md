@@ -1,3 +1,8 @@
+0.18.0
+
+  Fix silent TTS
+  Remove espeak symlinks
+
 0.17.0
 
   Ship speak skills
