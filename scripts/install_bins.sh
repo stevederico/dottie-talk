@@ -99,7 +99,7 @@ is_native_koko() {
   mag=$(od -An -N4 -tx1 "$f" 2>/dev/null | tr -d ' \n')
   case "$(uname -s)" in
     Linux)  [ "$mag" = "7f454c46" ] ;;
-    Darwin) [ "$mag" = "cfaedefe" ] || [ "$mag" = "feedfacf" ] || [ "$mag" = "cefaedfe" ] ;;
+    Darwin) [ "$mag" = "cffaedfe" ] || [ "$mag" = "feedfacf" ] || [ "$mag" = "cefaedfe" ] ;;
     *) return 0 ;;
   esac
 }

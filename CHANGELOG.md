@@ -1,3 +1,7 @@
+0.19.0
+
+  Fix Mac koko check
+
 0.18.0
 
   Fix silent TTS
