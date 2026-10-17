@@ -1,3 +1,7 @@
+0.20.0
+
+  Use stable node path
+
 0.19.0
 
   Fix Mac koko check

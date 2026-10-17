@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { stableNodePath } from './bar.js';
 import { PORTS } from './ports.js';
 import { loadConfig, setKeysEnabled } from './config.js';
 import { dictate, keysFlagPath, keysStatus, removeKeysFlag, speakSelection, stopSpeak, writeKeysFlag } from './keys.js';
@@ -39,7 +40,7 @@ export function wrapperPaths() {
 }
 
 export function wrapperScript(action) {
-  const node = process.execPath;
+  const node = stableNodePath();
   return `#!/bin/sh
 ${MARKER}
 export DOTTIE_TALK_KEYS_HOTKEY=1

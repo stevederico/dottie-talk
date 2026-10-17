@@ -39,9 +39,20 @@ export function shellConfigPath() {
     || path.join(os.homedir(), '.config', 'omarchy', 'shell.json');
 }
 
+/**
+ * Node path for generated scripts. A mise versioned node (installs/node/26.7.0)
+ * maps to installs/node/latest, so a node upgrade or prune does not break them.
+ */
+export function stableNodePath(execPath = process.execPath, exists = existsSync) {
+  const m = execPath.match(/^(.*\/mise\/installs\/node\/)\d+(?:\.\d+)*(\/bin\/node)$/);
+  if (!m) return execPath;
+  const latest = `${m[1]}latest${m[2]}`;
+  return exists(latest) ? latest : execPath;
+}
+
 export function talkBinScript(subcommand) {
   const rest = subcommand ? `${subcommand} "$@"` : '"$@"';
-  return `#!/bin/sh\n${MARKER}\nexec ${shellQuote(process.execPath)} ${shellQuote(CLI)} ${rest}\n`;
+  return `#!/bin/sh\n${MARKER}\nexec ${shellQuote(stableNodePath())} ${shellQuote(CLI)} ${rest}\n`;
 }
 
 function shellQuote(value) {

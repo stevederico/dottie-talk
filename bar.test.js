@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { barHasWidget, barPutArgs, installBar, talkBinScript } from './bar.js';
+import { barHasWidget, barPutArgs, installBar, stableNodePath, talkBinScript } from './bar.js';
 
 describe('barHasWidget', () => {
   it('finds the talk widget', () => {
@@ -35,6 +35,23 @@ describe('talkBinScript', () => {
     assert.match(sh, /dottie-talk/);
     assert.match(sh, /cli\.js/);
     assert.match(talkBinScript('speak'), /cli\.js' speak /);
+  });
+});
+
+describe('stableNodePath', () => {
+  const pinned = '/home/u/.local/share/mise/installs/node/26.7.0/bin/node';
+  const latest = '/home/u/.local/share/mise/installs/node/latest/bin/node';
+
+  it('maps a mise versioned node to latest', () => {
+    assert.equal(stableNodePath(pinned, (p) => p === latest), latest);
+  });
+
+  it('keeps the versioned node when latest is missing', () => {
+    assert.equal(stableNodePath(pinned, () => false), pinned);
+  });
+
+  it('leaves non-mise node alone', () => {
+    assert.equal(stableNodePath('/usr/bin/node', () => true), '/usr/bin/node');
   });
 });
 
