@@ -1,3 +1,7 @@
+0.21.0
+
+  Ignore downloaded model files
+
 0.20.0
 
   Use stable node path

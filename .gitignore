@@ -3,3 +3,5 @@ node_modules/
 .DS_Store
 /bin/koko-linux-x86_64
 /bin/lib/
+/checkpoints/
+/data/
