@@ -60,14 +60,14 @@ Add to Claude Code:
 claude mcp add dottie-talk -s user -- node ~/Projects/dottie-talk/mcp.js
 ```
 
-## Speak-back (Claude Code)
+## Talk-back (Claude Code)
 
-Read Claude's replies aloud through koko. `speak-back.js` runs as two Claude Code hooks, and `skills/` has the `/speak` and `/speak-toggle` skills.
+Read Claude's replies aloud through koko. `talk-back.js` runs as two Claude Code hooks, and `skills/` has the `/speak` and `/speak-toggle` skills.
 
 | Command | What |
 |---|---|
 | `/speak` | speak this session's last reply, one time |
-| `/speak on` / `off` / `toggle` | speak-back mode: read every reply aloud |
+| `/speak on` / `off` / `toggle` | talk-back mode: read every reply aloud |
 | `/speak-toggle` | same as `/speak toggle` |
 | `/speak stop` | stop playback |
 | `/speak status` | on or off |
@@ -76,7 +76,7 @@ Stop it: type anything (the next prompt cuts playback off), `/speak stop`, or `/
 
 What is read: only the final reply. Never thinking, tool calls, or notes written between tool calls. Code blocks, tables, URLs, and markdown marks are dropped.
 
-State: `~/.config/dottie-talk/speak-back/`. The saved last reply is per session (`last-<session>.txt`), so two windows never read each other's reply. The on/off mode is global.
+State: `~/.config/dottie-talk/talk-back/`. The saved last reply is per session (`last-<session>.txt`), so two windows never read each other's reply. The on/off mode is global.
 
 ### Setup
 
@@ -93,8 +93,8 @@ State: `~/.config/dottie-talk/speak-back/`. The saved last reply is per session 
    ```json
    {
      "hooks": {
-       "Stop": [{ "hooks": [{ "type": "command", "command": "node ~/Projects/dottie-talk/speak-back.js hook", "timeout": 5 }] }],
-       "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node ~/Projects/dottie-talk/speak-back.js interrupt", "timeout": 5 }] }]
+       "Stop": [{ "hooks": [{ "type": "command", "command": "node ~/Projects/dottie-talk/talk-back.js hook", "timeout": 5 }] }],
+       "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node ~/Projects/dottie-talk/talk-back.js interrupt", "timeout": 5 }] }]
      }
    }
    ```

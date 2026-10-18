@@ -4,10 +4,10 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const dir = mkdtempSync(path.join(os.tmpdir(), 'dottie-speak-back-'));
-process.env.DOTTIE_TALK_SPEAK_BACK_DIR = dir;
+const dir = mkdtempSync(path.join(os.tmpdir(), 'dottie-talk-back-'));
+process.env.DOTTIE_TALK_TALK_BACK_DIR = dir;
 process.env.CLAUDE_CODE_SESSION_ID = 'sess-a';
-const { hook, isOn, lastReplyFromTranscript, setOn, speakable } = await import('./speak-back.js');
+const { hook, isOn, lastReplyFromTranscript, setOn, speakable } = await import('./talk-back.js');
 
 after(() => rmSync(dir, { recursive: true, force: true }));
 

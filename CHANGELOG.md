@@ -1,3 +1,7 @@
+0.22.0
+
+  Rename to talk-back
+
 0.21.0
 
   Ignore downloaded model files

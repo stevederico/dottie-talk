@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Claude Code speak-back: read assistant replies aloud through koko.
+ * Claude Code talk-back: read assistant replies aloud through koko.
  *
- *   node speak-back.js hook     Stop hook. Saves the reply; speaks it when on.
- *   node speak-back.js last     Speak the last saved reply.
- *   node speak-back.js on|off   Toggle speak-back.
- *   node speak-back.js stop     Stop playback.
- *   node speak-back.js interrupt  UserPromptSubmit hook. Typing cuts playback off.
- *   node speak-back.js status   Print on/off.
+ *   node talk-back.js hook     Stop hook. Saves the reply; speaks it when on.
+ *   node talk-back.js last     Speak the last saved reply.
+ *   node talk-back.js on|off   Toggle talk-back.
+ *   node talk-back.js stop     Stop playback.
+ *   node talk-back.js interrupt  UserPromptSubmit hook. Typing cuts playback off.
+ *   node talk-back.js status   Print on/off.
  */
 
 import { spawn } from 'node:child_process';
@@ -16,8 +16,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const STATE_DIR = process.env.DOTTIE_TALK_SPEAK_BACK_DIR
-  || path.join(os.homedir(), '.config', 'dottie-talk', 'speak-back');
+const STATE_DIR = process.env.DOTTIE_TALK_TALK_BACK_DIR
+  || path.join(os.homedir(), '.config', 'dottie-talk', 'talk-back');
 const flagPath = () => path.join(STATE_DIR, 'on');
 // Per session: two Claude Code windows must not read each other's replies.
 // The hook gets session_id on stdin; /speak's Bash gets CLAUDE_CODE_SESSION_ID.
@@ -178,13 +178,13 @@ async function main(cmd) {
     }
     case 'on':
       setOn(true);
-      console.log('speak-back on');
+      console.log('talk-back on');
       return 0;
     case 'off': {
       setOn(false);
       const { stopSpeak } = await import('./keys.js');
       stopSpeak();
-      console.log('speak-back off');
+      console.log('talk-back off');
       return 0;
     }
     case 'stop': {
@@ -202,10 +202,10 @@ async function main(cmd) {
     case 'toggle':
       return main(isOn() ? 'off' : 'on');
     case 'status':
-      console.log(`speak-back ${isOn() ? 'on' : 'off'}`);
+      console.log(`talk-back ${isOn() ? 'on' : 'off'}`);
       return 0;
     default:
-      console.log('usage: speak-back.js hook|last|on|off|toggle|stop|status');
+      console.log('usage: talk-back.js hook|last|on|off|toggle|stop|status');
       return 1;
   }
 }
