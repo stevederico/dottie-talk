@@ -20,7 +20,7 @@ const STATE_DIR = process.env.DOTTIE_TALK_TALK_BACK_DIR
   || path.join(os.homedir(), '.config', 'dottie-talk', 'talk-back');
 const flagPath = () => path.join(STATE_DIR, 'on');
 // Per session: two Claude Code windows must not read each other's replies.
-// The hook gets session_id on stdin; /speak's Bash gets CLAUDE_CODE_SESSION_ID.
+// The hook gets session_id on stdin; /talk's Bash gets CLAUDE_CODE_SESSION_ID.
 const sid = (id) => String(id || process.env.CLAUDE_CODE_SESSION_ID || 'default').replace(/[^\w-]/g, '');
 const lastPath = (id) => path.join(STATE_DIR, `last-${sid(id)}.txt`);
 // Set by `last` / `stop`. The next Stop is that command's own reply: the hook
@@ -143,7 +143,7 @@ export async function hook(input) {
   if (!reply && input.transcript_path) {
     try { reply = lastReplyFromTranscript(readFileSync(input.transcript_path, 'utf8')); } catch { /* ok */ }
   }
-  // The /speak turn's own reply: keep the saved reply, stay quiet.
+  // The /talk turn's own reply: keep the saved reply, stay quiet.
   if (consumeSkip(input.session_id)) return { spoke: false };
   const text = speakable(reply);
   if (!text) return { spoke: false };

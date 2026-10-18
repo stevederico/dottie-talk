@@ -1,3 +1,7 @@
+0.23.0
+
+  Rename skills to talk
+
 0.22.0
 
   Rename to talk-back

@@ -1,11 +1,11 @@
 ---
-name: speak-toggle
+name: talk-toggle
 author: stevederico
-description: Toggle dottie-talk talk-back mode, where every Claude reply is read aloud. Use for /speak-toggle.
+description: Toggle dottie-talk talk-back mode, where every Claude reply is read aloud. Use for /talk-toggle.
 disable-model-invocation: true
 ---
 
-# speak-toggle
+# talk-toggle
 
 Run exactly one command, then reply with only its one-line output. No other text.
 

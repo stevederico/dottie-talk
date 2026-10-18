@@ -62,17 +62,17 @@ claude mcp add dottie-talk -s user -- node ~/Projects/dottie-talk/mcp.js
 
 ## Talk-back (Claude Code)
 
-Read Claude's replies aloud through koko. `talk-back.js` runs as two Claude Code hooks, and `skills/` has the `/speak` and `/speak-toggle` skills.
+Read Claude's replies aloud through koko. `talk-back.js` runs as two Claude Code hooks, and `skills/` has the `/talk` and `/talk-toggle` skills.
 
 | Command | What |
 |---|---|
-| `/speak` | speak this session's last reply, one time |
-| `/speak on` / `off` / `toggle` | talk-back mode: read every reply aloud |
-| `/speak-toggle` | same as `/speak toggle` |
-| `/speak stop` | stop playback |
-| `/speak status` | on or off |
+| `/talk` | speak this session's last reply, one time |
+| `/talk on` / `off` / `toggle` | talk-back mode: read every reply aloud |
+| `/talk-toggle` | same as `/talk toggle` |
+| `/talk stop` | stop playback |
+| `/talk status` | on or off |
 
-Stop it: type anything (the next prompt cuts playback off), `/speak stop`, or `/speak off`. On Linux with `dottie-talk keys on`, Escape stops it too.
+Stop it: type anything (the next prompt cuts playback off), `/talk stop`, or `/talk off`. On Linux with `dottie-talk keys on`, Escape stops it too.
 
 What is read: only the final reply. Never thinking, tool calls, or notes written between tool calls. Code blocks, tables, URLs, and markdown marks are dropped.
 
@@ -84,8 +84,8 @@ State: `~/.config/dottie-talk/talk-back/`. The saved last reply is per session (
 2. Link the skills:
 
    ```bash
-   ln -s ~/Projects/dottie-talk/skills/speak ~/.claude/skills/speak
-   ln -s ~/Projects/dottie-talk/skills/speak-toggle ~/.claude/skills/speak-toggle
+   ln -s ~/Projects/dottie-talk/skills/talk ~/.claude/skills/talk
+   ln -s ~/Projects/dottie-talk/skills/talk-toggle ~/.claude/skills/talk-toggle
    ```
 
 3. Add the hooks to `~/.claude/settings.json`:
@@ -99,7 +99,7 @@ State: `~/.config/dottie-talk/talk-back/`. The saved last reply is per session (
    }
    ```
 
-4. Restart Claude Code, then `/speak on`
+4. Restart Claude Code, then `/talk on`
 
 The Stop hook saves every reply and speaks it only when the mode is on. It returns at once; playback runs in a detached child. The `interrupt` hook prints nothing, because `UserPromptSubmit` output goes into the model's context.
 
