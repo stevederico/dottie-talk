@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  dirHasRequiredBins, isNativeBin, kokoCandidates, kokoEspeakEnv, ttsState, voxtypeFetchSpec,
+  dirHasRequiredBins, isNativeBin, kokoCandidates, kokoEspeakEnv, sttState, ttsState, voxtypeFetchSpec,
 } from './bin_supervise.js';
 
 describe('kokoEspeakEnv', () => {
@@ -104,5 +104,27 @@ describe('ttsState', () => {
     });
     assert.equal(r, 'wedged');
     assert.equal(calls, 4);
+  });
+});
+
+describe('sttState', () => {
+  const fast = { retryDelayMs: 0 };
+
+  it('probes parakeet /health on the STT port', async () => {
+    const urls = [];
+    const r = await sttState({ ...fast, healthFn: async (u) => { urls.push(u); return true; } });
+    assert.equal(r, 'up');
+    assert.match(urls[0], /:1315\/health$/);
+  });
+
+  it('is up, not down, when a busy parakeet answers a retry', async () => {
+    let calls = 0;
+    const r = await sttState({ ...fast, healthFn: async () => ++calls > 2, portOpenFn: async () => true });
+    assert.equal(r, 'up');
+  });
+
+  it('is down only when nothing listens', async () => {
+    const r = await sttState({ ...fast, healthFn: async () => false, portOpenFn: async () => false });
+    assert.equal(r, 'down');
   });
 });

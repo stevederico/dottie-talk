@@ -1,3 +1,9 @@
+0.24.0
+
+  Fix stacked parakeet
+  Add sttState check
+  Kill wedged STT
+
 0.23.0
 
   Rename skills to talk

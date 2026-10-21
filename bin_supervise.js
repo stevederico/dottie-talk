@@ -335,7 +335,13 @@ export async function ensureVoxtypeReady() {
 
 async function spawnStt() {
   if (sttBackend() === 'voxtype') return ensureVoxtypeReady();
-  if (await healthOk(`http://127.0.0.1:${PORTS.STT_PORT}/health`)) return true;
+  const state = await sttState();
+  if (state === 'up') return true;
+  if (state === 'wedged') {
+    log('STT not answering — killing wedged parakeet');
+    killWedgedStt();
+    await new Promise((r) => setTimeout(r, 250));
+  }
   const dir = ensurePackageBinsInstalled();
   const bin = [path.join(dir, 'parakeet-server'), '/usr/local/bin/parakeet-server']
     .find((p) => existsSync(p));
@@ -395,6 +401,20 @@ function resolveKokoBin() {
   return null;
 }
 
+function killWedgedStt() {
+  const p = children.stt;
+  if (p && !p.killed) {
+    try { p.kill('SIGKILL'); } catch { /* ok */ }
+    children.stt = null;
+  }
+  try {
+    execSync(`pkill -9 -f '[p]arakeet-server .*--port ${PORTS.STT_PORT}'`, {
+      stdio: 'ignore',
+      timeout: 2000,
+    });
+  } catch { /* none running */ }
+}
+
 function killWedgedTts() {
   const p = children.tts;
   if (p && !p.killed) {
@@ -424,20 +444,33 @@ function portOpen(port, timeoutMs = 500) {
  * across every retry. One slow probe is not a wedge.
  * @returns {Promise<'up'|'down'|'wedged'>}
  */
-export async function ttsState({
+export async function serviceState({
+  url,
+  port,
   healthFn = healthOk,
   portOpenFn = portOpen,
   retries = 3,
   retryDelayMs = 500,
-} = {}) {
-  const url = `http://127.0.0.1:${PORTS.TTS_PORT}/`;
+}) {
   if (await healthFn(url)) return 'up';
-  if (!(await portOpenFn(PORTS.TTS_PORT))) return 'down';
+  if (!(await portOpenFn(port))) return 'down';
   for (let i = 0; i < retries; i++) {
     await new Promise((r) => setTimeout(r, retryDelayMs));
     if (await healthFn(url, 2000)) return 'up';
   }
   return 'wedged';
+}
+
+export function ttsState(opts = {}) {
+  return serviceState({ url: `http://127.0.0.1:${PORTS.TTS_PORT}/`, port: PORTS.TTS_PORT, ...opts });
+}
+
+/**
+ * parakeet binds with SO_REUSEPORT, so a second copy starts fine on a busy
+ * port. Spawning on one slow probe stacked copies; check the port first.
+ */
+export function sttState(opts = {}) {
+  return serviceState({ url: `http://127.0.0.1:${PORTS.STT_PORT}/health`, port: PORTS.STT_PORT, ...opts });
 }
 
 async function spawnTts() {
