@@ -1,3 +1,9 @@
+0.25.0
+
+  Bump parakeet v0.6.1
+  Rebase stream patch
+  Rebuild parakeet-server
+
 0.24.0
 
   Fix stacked parakeet

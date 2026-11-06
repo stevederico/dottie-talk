@@ -3,11 +3,9 @@
 #
 # Pinned commit. Unlike llama.cpp there are no prebuilt macOS release assets,
 # so this compiles from source (cmake + Xcode CLT required on the build host)
-# and caches the result. The pin is the head of upstream PR #8 (mudler's
-# OpenAI-compatible server example) which also includes the Apple Metal GPU
-# fast path from PR #4 — the v0.1.x tags are stale (they predate Metal support
-# and abort with "unsupported op 'CONV_2D_DW'"). Move the pin to a tag once
-# the PR merges and upstream cuts a release.
+# and caches the result. The pin is the v0.6.1 release tag (2026-10-07), which
+# has the OpenAI-compatible server, the Apple Metal path, --concurrency and
+# --sound-model. Bump it to a newer tag and rebase patches/parakeet/ with it.
 #
 # Static link (BUILD_SHARED_LIBS=OFF): one self-contained Mach-O (~3 MB,
 # system frameworks only). Avoids shipping ggml dylibs that collide with other
@@ -38,7 +36,7 @@
 
 set -euo pipefail
 
-PARAKEET_REF="${PARAKEET_REF:-23bd49cb3d1fee6a0d69a4d2407e9069c7100ad2}"
+PARAKEET_REF="${PARAKEET_REF:-5c9b0fbbd8e611d88e47d7e1ebae9bca9b447e8f}"  # v0.6.1
 REPO_URL="https://github.com/mudler/parakeet.cpp"
 SHORT_REF="${PARAKEET_REF:0:12}"
 
