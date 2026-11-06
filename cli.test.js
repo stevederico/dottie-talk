@@ -17,6 +17,14 @@ describe('parseArgs', () => {
     assert.equal(r.file, 'clip.wav');
   });
 
+  it('parses transcribe --srt / --json, defaulting to text', () => {
+    assert.equal(parseArgs(['node', 'cli.js', 'transcribe', 'clip.wav']).format, 'text');
+    assert.equal(parseArgs(['node', 'cli.js', 'transcribe', 'clip.wav', '--srt']).format, 'srt');
+    const r = parseArgs(['node', 'cli.js', 'transcribe', '--json', 'clip.wav']);
+    assert.equal(r.format, 'json');
+    assert.equal(r.file, 'clip.wav');
+  });
+
   it('parses bare transcribe bin', () => {
     const r = parseArgs(['node', '/usr/local/bin/transcribe', 'clip.wav']);
     assert.equal(r.cmd, 'transcribe');

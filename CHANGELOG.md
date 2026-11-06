@@ -1,3 +1,10 @@
+0.26.0
+
+  Add transcribe --srt
+  Add transcribe --json
+  Chunk long audio
+  Exit after output
+
 0.25.0
 
   Bump parakeet v0.6.1

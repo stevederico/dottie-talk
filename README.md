@@ -23,6 +23,7 @@ Bins ship in `bin/` (macOS). Models download on first boot (`~/.cache/parakeet.c
 | `npm run tts` | TTS only (`:1314`) |
 | `dottie-talk speak "hi"` / `speak "hi"` | TTS → `speech.wav` (or `-o` / stdout) |
 | `dottie-talk transcribe a.wav` / `transcribe a.wav` | STT → text on stdout |
+| `dottie-talk transcribe a.wav --srt` / `--json` | STT with per-word times → SRT captions or `{ text, words, segments }` (parakeet; long audio is chunked) |
 | `dottie-talk start` | same as `npm start` |
 | `dottie-talk health` | STT/TTS readiness JSON |
 | `dottie-talk keys on` | enable talk-keys-style hotkeys (off by default) |

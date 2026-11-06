@@ -13,7 +13,7 @@ import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { speak, transcribe } from './core.js';
+import { speak, transcribe, transcribeWords, wordsToCues, cuesToSrt } from './core.js';
 import { ensureBinsRunning, binsHealth } from './bin_supervise.js';
 import { PORTS } from './ports.js';
 
@@ -24,9 +24,9 @@ function usage(code = 0) {
 
 Usage:
   dottie-talk speak <text> [-o out.wav] [--voice <id>]
-  dottie-talk transcribe <audio.wav>
+  dottie-talk transcribe <audio.wav> [--srt|--json]
   speak <text> [-o out.wav] [--voice <id>]
-  transcribe <audio.wav>
+  transcribe <audio.wav> [--srt|--json]
   dottie-talk start
   dottie-talk health
   dottie-talk keys [on|off|status|speak|stop|dictate]
@@ -35,7 +35,8 @@ Usage:
   dottie-talk help
 
 speak writes WAV to -o, or stdout when piped, else ./speech.wav.
-transcribe prints text to stdout.
+transcribe prints text to stdout; --srt prints timed captions, --json prints
+{ text, language, duration, segments, words } with per-word times (parakeet only).
 start runs the HTTP façade on :${PORTS.TALK_HTTP_PORT}.
 keys is off by default. on installs Hyprland binds; they arm while start is running.
 Speak Alt+S. Hold Alt+D to dictate. Escape stops speak.
@@ -47,7 +48,7 @@ stop ends the HTTP server. bar on puts the Omarchy menubar icon (visible while s
 
 /**
  * @param {string[]} argv
- * @returns {{ cmd: string, text: string, file: string, out: string, voice: string, keysAction: string, barAction: string }}
+ * @returns {{ cmd: string, text: string, file: string, out: string, voice: string, format: string, keysAction: string, barAction: string }}
  */
 export function parseArgs(argv) {
   const bin = path.basename(argv[1] || '').replace(/\.js$/, '');
@@ -61,9 +62,14 @@ export function parseArgs(argv) {
   }
   let out = '';
   let voice = '';
+  let format = 'text';
   const positionals = [];
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
+    if (a === '--srt' || a === '--json') {
+      format = a.slice(2);
+      continue;
+    }
     if (a === '-o' || a === '--out') {
       out = rest[++i] || '';
       continue;
@@ -83,6 +89,7 @@ export function parseArgs(argv) {
     barAction: cmd === 'bar' ? (positionals[0] || 'status') : '',
     out,
     voice,
+    format,
   };
 }
 
@@ -119,19 +126,41 @@ async function cmdSpeak({ text, out, voice }) {
   process.stdout.write(wav);
 }
 
-async function cmdTranscribe({ file }) {
+async function cmdTranscribe({ file, format }) {
   if (!file) {
-    process.stderr.write('usage: transcribe <audio.wav>\n');
+    process.stderr.write('usage: transcribe <audio.wav> [--srt|--json]\n');
     process.exit(1);
   }
   await ensureBinsRunning();
   const wavBuffer = readFileSync(file);
+  if (format === 'srt' || format === 'json') {
+    const timed = await transcribeWords({ wavBuffer });
+    if (timed.error) {
+      process.stderr.write(`${timed.error}\n`);
+      process.exit(1);
+    }
+    const segments = wordsToCues(timed.words);
+    exitAfterWrite(format === 'srt'
+      ? cuesToSrt(segments)
+      : `${JSON.stringify({ ...timed, segments }, null, 2)}\n`);
+    return;
+  }
   const result = await transcribe({ wavBuffer });
   if (result.error) {
     process.stderr.write(`${result.error}\n`);
     process.exit(1);
   }
-  process.stdout.write(`${result.text}\n`);
+  exitAfterWrite(`${result.text}\n`);
+}
+
+/**
+ * Write to stdout, then exit once it drains. When ensureBinsRunning had to
+ * spawn parakeet/koko, those children keep the event loop alive and a plain
+ * return would hang the CLI; the servers keep running after we exit.
+ * @param {string} text
+ */
+function exitAfterWrite(text) {
+  process.stdout.write(text, () => process.exit(0));
 }
 
 async function cmdHealth() {

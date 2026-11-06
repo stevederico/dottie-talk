@@ -111,6 +111,196 @@ async function transcribeParakeet(buf, fetchFn) {
   }
 }
 
+// The patched parakeet-server caps request bodies at ~20 MB (about 10 minutes
+// of 16 kHz mono PCM16), so long audio is sent in chunks cut at quiet spots.
+const CHUNK_SEC = 300;
+const CUT_SEARCH_SEC = 10;
+
+/**
+ * Locate the fmt and data chunks of a WAV file.
+ * @param {Buffer} buf
+ * @returns {{ sampleRate: number, channels: number, bits: number, dataOffset: number, dataLength: number }|null}
+ */
+export function parseWav(buf) {
+  if (buf.length < 12 || buf.toString('ascii', 0, 4) !== 'RIFF' || buf.toString('ascii', 8, 12) !== 'WAVE') return null;
+  let fmt = null;
+  let off = 12;
+  while (off + 8 <= buf.length) {
+    const id = buf.toString('ascii', off, off + 4);
+    const size = buf.readUInt32LE(off + 4);
+    if (id === 'fmt ') {
+      fmt = { channels: buf.readUInt16LE(off + 10), sampleRate: buf.readUInt32LE(off + 12), bits: buf.readUInt16LE(off + 22) };
+    } else if (id === 'data' && fmt) {
+      return { ...fmt, dataOffset: off + 8, dataLength: Math.min(size, buf.length - off - 8) };
+    }
+    off += 8 + size + (size % 2);
+  }
+  return null;
+}
+
+/**
+ * Build a PCM16 WAV file around raw sample bytes.
+ * @param {Buffer} data
+ * @param {number} sampleRate
+ * @param {number} channels
+ */
+function makeWav(data, sampleRate, channels) {
+  const h = Buffer.alloc(44);
+  h.write('RIFF', 0, 'ascii');
+  h.writeUInt32LE(36 + data.length, 4);
+  h.write('WAVEfmt ', 8, 'ascii');
+  h.writeUInt32LE(16, 16);
+  h.writeUInt16LE(1, 20);
+  h.writeUInt16LE(channels, 22);
+  h.writeUInt32LE(sampleRate, 24);
+  h.writeUInt32LE(sampleRate * channels * 2, 28);
+  h.writeUInt16LE(channels * 2, 32);
+  h.writeUInt16LE(16, 34);
+  h.write('data', 36, 'ascii');
+  h.writeUInt32LE(data.length, 40);
+  return Buffer.concat([h, data]);
+}
+
+/**
+ * Split a PCM16 WAV into chunks of about CHUNK_SEC, cutting at the quietest
+ * 20 ms frame in the CUT_SEARCH_SEC before each boundary so words stay whole.
+ * @param {Buffer} buf
+ * @param {number} [chunkSec]
+ * @returns {{ wav: Buffer, offsetSec: number }[]}
+ */
+export function chunkWav(buf, chunkSec = CHUNK_SEC) {
+  const w = parseWav(buf);
+  if (!w || w.bits !== 16) return [{ wav: buf, offsetSec: 0 }];
+  const frameBytes = w.channels * 2;
+  const total = Math.floor(w.dataLength / frameBytes);
+  const perChunk = chunkSec * w.sampleRate;
+  if (total <= perChunk) return [{ wav: buf, offsetSec: 0 }];
+
+  const win = Math.round(w.sampleRate * 0.02);
+  const energy = (start) => {
+    let sum = 0;
+    for (let i = start; i < start + win; i++) {
+      const s = buf.readInt16LE(w.dataOffset + i * frameBytes);
+      sum += s * s;
+    }
+    return sum;
+  };
+
+  const chunks = [];
+  let start = 0;
+  while (total - start > perChunk) {
+    const target = start + perChunk;
+    let cut = target;
+    let best = Infinity;
+    // Search only the back half of the chunk so a cut always makes progress;
+    // on ties the later frame wins, so uniform audio cuts near the boundary.
+    const from = Math.max(start + Math.floor(perChunk / 2), target - CUT_SEARCH_SEC * w.sampleRate);
+    for (let f = from; f + win <= target; f += win) {
+      const e = energy(f);
+      if (e <= best) { best = e; cut = f + Math.floor(win / 2); }
+    }
+    chunks.push([start, cut]);
+    start = cut;
+  }
+  chunks.push([start, total]);
+
+  return chunks.map(([a, b]) => ({
+    wav: makeWav(buf.subarray(w.dataOffset + a * frameBytes, w.dataOffset + b * frameBytes), w.sampleRate, w.channels),
+    offsetSec: a / w.sampleRate,
+  }));
+}
+
+/**
+ * Transcribe with per-word timestamps (parakeet only). Long audio is chunked
+ * and each chunk's word times are shifted by its start offset.
+ * @param {object} opts
+ * @param {Buffer} opts.wavBuffer
+ * @param {typeof fetch} [opts.fetchFn]
+ * @returns {Promise<{ text: string, language: string, duration: number, words: { word: string, start: number, end: number, conf?: number }[] }|{ error: string }>}
+ */
+export async function transcribeWords({ wavBuffer, fetchFn = globalThis.fetch } = {}) {
+  if (!wavBuffer || !wavBuffer.length) return { error: 'wavBuffer required' };
+  if (sttBackend() === 'voxtype') return { error: 'timestamps need parakeet; voxtype returns text only' };
+
+  const words = [];
+  const texts = [];
+  let language = '';
+  let duration = 0;
+  for (const { wav, offsetSec } of chunkWav(Buffer.from(wavBuffer))) {
+    const form = new FormData();
+    form.append('file', new Blob([wav], { type: 'audio/wav' }), 'audio.wav');
+    form.append('response_format', 'verbose_json');
+    form.append('timestamp_granularities[]', 'word');
+    let json;
+    try {
+      const res = await fetchFn(`${STT}/v1/audio/transcriptions`, {
+        method: 'POST',
+        body: form,
+        signal: AbortSignal.timeout(600_000),
+      });
+      const body = await res.text();
+      try { json = JSON.parse(body); } catch { return { error: `STT ${res.status}: ${body.slice(0, 300)}` }; }
+      if (!res.ok) return { error: `STT ${res.status}: ${json.error?.message || json.error || body.slice(0, 300)}` };
+    } catch (err) {
+      const gone = err.cause?.code === 'ECONNREFUSED' || /fetch failed/i.test(err.message);
+      return { error: gone ? `parakeet not running on :${PORTS.STT_PORT} — run: npm start` : err.message };
+    }
+    if (json.text) texts.push(json.text.trim());
+    if (!language && json.language) language = json.language;
+    duration = offsetSec + (json.duration || 0);
+    for (const w of json.words || []) {
+      words.push({ ...w, start: round3(w.start + offsetSec), end: round3(w.end + offsetSec) });
+    }
+  }
+  return { text: texts.filter(Boolean).join(' '), language, duration: round3(duration), words };
+}
+
+function round3(n) {
+  return Math.round(n * 1000) / 1000;
+}
+
+/**
+ * Group timed words into caption cues: break before a cue would pass
+ * maxChars, after sentence-ending punctuation, or at a pause over maxGap.
+ * @param {{ word: string, start: number, end: number }[]} words
+ * @returns {{ start: number, end: number, text: string }[]}
+ */
+export function wordsToCues(words, { maxChars = 60, maxGap = 1.0 } = {}) {
+  const cues = [];
+  let cur = null;
+  for (const w of words) {
+    const word = String(w.word).trim();
+    if (!word) continue;
+    const breakHere = cur && (
+      cur.text.length + 1 + word.length > maxChars
+      || w.start - cur.end > maxGap
+      || /[.?!]$/.test(cur.text)
+    );
+    if (!cur || breakHere) {
+      if (cur) cues.push(cur);
+      cur = { start: w.start, end: w.end, text: word };
+    } else {
+      cur.text += ` ${word}`;
+      cur.end = w.end;
+    }
+  }
+  if (cur) cues.push(cur);
+  return cues;
+}
+
+/**
+ * Render cues as SRT.
+ * @param {{ start: number, end: number, text: string }[]} cues
+ */
+export function cuesToSrt(cues) {
+  const ts = (sec) => {
+    const ms = Math.max(0, Math.round(sec * 1000));
+    const pad = (n, l = 2) => String(n).padStart(l, '0');
+    return `${pad(Math.floor(ms / 3_600_000))}:${pad(Math.floor(ms / 60_000) % 60)}:${pad(Math.floor(ms / 1000) % 60)},${pad(ms % 1000, 3)}`;
+  };
+  return cues.map((c, i) => `${i + 1}\n${ts(c.start)} --> ${ts(c.end)}\n${c.text}\n`).join('\n');
+}
+
 /**
  * @param {object} opts
  * @param {string} opts.text
