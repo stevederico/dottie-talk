@@ -1,3 +1,9 @@
+0.28.0
+
+  Write real WAV
+  Convert non-WAV input
+  Show STT errors
+
 0.27.0
 
   Sync lockfile version

@@ -13,7 +13,7 @@ import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { speak, transcribe, transcribeWords, wordsToCues, cuesToSrt } from './core.js';
+import { speak, transcribe, transcribeWords, wordsToCues, cuesToSrt, formatForPath } from './core.js';
 import { ensureBinsRunning, binsHealth } from './bin_supervise.js';
 import { PORTS } from './ports.js';
 
@@ -24,9 +24,9 @@ function usage(code = 0) {
 
 Usage:
   dottie-talk speak <text> [-o out.wav] [--voice <id>]
-  dottie-talk transcribe <audio.wav> [--srt|--json]
+  dottie-talk transcribe <audio> [--srt|--json]
   speak <text> [-o out.wav] [--voice <id>]
-  transcribe <audio.wav> [--srt|--json]
+  transcribe <audio> [--srt|--json]
   dottie-talk start
   dottie-talk health
   dottie-talk keys [on|off|status|speak|stop|dictate]
@@ -34,8 +34,8 @@ Usage:
   dottie-talk stop
   dottie-talk help
 
-speak writes WAV to -o, or stdout when piped, else ./speech.wav.
-transcribe prints text to stdout; --srt prints timed captions, --json prints
+speak writes WAV to -o (MP3 if it ends in .mp3), or stdout when piped, else ./speech.wav.
+transcribe reads WAV, or any format ffmpeg reads (mp3, m4a, mp4...), and prints text to stdout; --srt prints timed captions, --json prints
 { text, language, duration, segments, words } with per-word times (parakeet only).
 start runs the HTTP façade on :${PORTS.TALK_HTTP_PORT}.
 keys is off by default. on installs Hyprland binds; they arm while start is running.
@@ -103,7 +103,7 @@ async function cmdSpeak({ text, out, voice }) {
   let result;
   try {
     await ensureBinsRunning();
-    result = await speak({ text, voice: voice || undefined });
+    result = await speak({ text, voice: voice || undefined, format: formatForPath(out) });
   } finally {
     clearProcessing();
   }
@@ -128,7 +128,7 @@ async function cmdSpeak({ text, out, voice }) {
 
 async function cmdTranscribe({ file, format }) {
   if (!file) {
-    process.stderr.write('usage: transcribe <audio.wav> [--srt|--json]\n');
+    process.stderr.write('usage: transcribe <audio> [--srt|--json]\n');
     process.exit(1);
   }
   await ensureBinsRunning();

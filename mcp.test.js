@@ -91,6 +91,17 @@ describe('callTool speak', () => {
     assert.equal(r.structuredContent.audioBase64, undefined);
   });
 
+  it('asks for the format the out path names', async () => {
+    const formats = [];
+    const spy = async (a) => { formats.push(a.format); return fakeSpeak(a); };
+    for (const name of ['clip.wav', 'clip.mp3']) {
+      await callTool('speak', { text: 'hi', out: path.join(dir, name) }, {
+        speakFn: spy, speakStreamFn: noStream, playWavFn: noPlay,
+      });
+    }
+    assert.deepEqual(formats, ['wav', 'mp3']);
+  });
+
   it('saves and plays when play: true with out', async () => {
     const out = path.join(dir, 'both.mp3');
     let played;

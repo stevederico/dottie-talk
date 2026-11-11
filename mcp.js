@@ -15,7 +15,7 @@ import { pathToFileURL } from 'node:url';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { transcribe, speak, speakStream } from './core.js';
+import { transcribe, speak, speakStream, formatForPath } from './core.js';
 import { ensureBinsRunning } from './bin_supervise.js';
 import { clearProcessing, markProcessing, playPcmStream, playWav } from './keys.js';
 
@@ -26,7 +26,7 @@ export const TALK_TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Path to a WAV file' },
+        path: { type: 'string', description: 'Path to an audio file: WAV, or any format ffmpeg reads (mp3, m4a, mp4...)' },
         wavBase64: { type: 'string', description: 'WAV bytes as base64. For apps; agents should pass `path`.' },
       },
     },
@@ -40,7 +40,7 @@ export const TALK_TOOLS = [
       properties: {
         text: { type: 'string', description: 'Text to speak' },
         voice: { type: 'string', description: 'Optional voice id' },
-        out: { type: 'string', description: 'Save the audio to this path' },
+        out: { type: 'string', description: 'Save the audio to this path. WAV, or MP3 if it ends in .mp3' },
         play: { type: 'boolean', description: 'Play out loud. Default true, false when `out` or `returnAudio` is set.' },
         returnAudio: { type: 'boolean', description: 'Also return audio as base64. For apps; large.' },
       },
@@ -101,7 +101,7 @@ export async function callTool(name, args = {}, {
     markProcessing();
     let result;
     try {
-      result = await speakFn({ text, voice });
+      result = await speakFn({ text, voice, format: out ? formatForPath(out) : undefined });
     } finally {
       clearProcessing();
     }

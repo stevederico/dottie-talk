@@ -4,7 +4,7 @@
  */
 
 import { execFile } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -37,6 +37,10 @@ export async function transcribe({
   if (!buf || !buf.length) {
     return { error: 'wavBase64 or wavBuffer required' };
   }
+
+  const norm = await toPcm16Wav(Buffer.from(buf), { execFileFn });
+  if (norm.error) return { error: norm.error };
+  buf = norm.wav;
 
   if (sttBackend() === 'voxtype') {
     return transcribeVoxtype(buf, execFileFn);
@@ -98,7 +102,7 @@ async function transcribeParakeet(buf, fetchFn) {
       return { error: `STT ${res.status}: ${textBody.slice(0, 300)}` };
     }
     if (!res.ok) {
-      return { error: `STT ${res.status}: ${json.error || textBody.slice(0, 300)}` };
+      return { error: `STT ${res.status}: ${errorText(json.error) || textBody.slice(0, 300)}` };
     }
     return { text: typeof json.text === 'string' ? json.text : '' };
   } catch (err) {
@@ -108,6 +112,53 @@ async function transcribeParakeet(buf, fetchFn) {
         ? `parakeet not running on :${PORTS.STT_PORT} — run: npm start`
         : err.message,
     };
+  }
+}
+
+/**
+ * Turn a server error field (string, or OpenAI-style { message }) into text.
+ * @param {unknown} err
+ * @returns {string}
+ */
+export function errorText(err) {
+  if (!err) return '';
+  if (typeof err === 'string') return err;
+  if (typeof err === 'object' && typeof err.message === 'string') return err.message;
+  return JSON.stringify(err);
+}
+
+/**
+ * STT servers only read WAV, and chunking needs PCM16. Pass PCM16 WAV through;
+ * convert anything else (mp3, m4a, float WAV, video) with ffmpeg to 16 kHz mono
+ * PCM16. Without ffmpeg, a WAV of another sample format is sent as is.
+ * @param {Buffer} buf
+ * @param {object} [opts]
+ * @param {(file: string, args: string[], opts?: object) => Promise<{ stdout: string, stderr: string }>} [opts.execFileFn]
+ * @returns {Promise<{ wav: Buffer }|{ error: string }>}
+ */
+export async function toPcm16Wav(buf, { execFileFn = execFileAsync } = {}) {
+  const w = parseWav(buf);
+  if (w && w.bits === 16) return { wav: buf };
+
+  const dir = mkdtempSync(path.join(tmpdir(), 'dottie-talk-'));
+  const inPath = path.join(dir, 'input');
+  const outPath = path.join(dir, 'audio.wav');
+  try {
+    writeFileSync(inPath, buf);
+    await execFileFn('ffmpeg', [
+      '-nostdin', '-hide_banner', '-loglevel', 'error', '-y',
+      '-i', inPath, '-vn', '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', outPath,
+    ], { timeout: 600_000, maxBuffer: 10 * 1024 * 1024, encoding: 'utf8' });
+    return { wav: readFileSync(outPath) };
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      if (w) return { wav: buf };
+      return { error: 'audio is not WAV and ffmpeg is not installed to convert it' };
+    }
+    const msg = err.stderr ? String(err.stderr).trim() : err.message;
+    return { error: `cannot decode audio: ${String(msg).slice(0, 300)}` };
+  } finally {
+    try { rmSync(dir, { recursive: true, force: true }); } catch { /* ok */ }
   }
 }
 
@@ -214,19 +265,22 @@ export function chunkWav(buf, chunkSec = CHUNK_SEC) {
  * Transcribe with per-word timestamps (parakeet only). Long audio is chunked
  * and each chunk's word times are shifted by its start offset.
  * @param {object} opts
- * @param {Buffer} opts.wavBuffer
+ * @param {Buffer} opts.wavBuffer Audio; non-WAV is converted with ffmpeg
  * @param {typeof fetch} [opts.fetchFn]
+ * @param {(file: string, args: string[], opts?: object) => Promise<{ stdout: string, stderr: string }>} [opts.execFileFn]
  * @returns {Promise<{ text: string, language: string, duration: number, words: { word: string, start: number, end: number, conf?: number }[] }|{ error: string }>}
  */
-export async function transcribeWords({ wavBuffer, fetchFn = globalThis.fetch } = {}) {
+export async function transcribeWords({ wavBuffer, fetchFn = globalThis.fetch, execFileFn = execFileAsync } = {}) {
   if (!wavBuffer || !wavBuffer.length) return { error: 'wavBuffer required' };
   if (sttBackend() === 'voxtype') return { error: 'timestamps need parakeet; voxtype returns text only' };
+  const norm = await toPcm16Wav(Buffer.from(wavBuffer), { execFileFn });
+  if (norm.error) return { error: norm.error };
 
   const words = [];
   const texts = [];
   let language = '';
   let duration = 0;
-  for (const { wav, offsetSec } of chunkWav(Buffer.from(wavBuffer))) {
+  for (const { wav, offsetSec } of chunkWav(norm.wav)) {
     const form = new FormData();
     form.append('file', new Blob([wav], { type: 'audio/wav' }), 'audio.wav');
     form.append('response_format', 'verbose_json');
@@ -240,7 +294,7 @@ export async function transcribeWords({ wavBuffer, fetchFn = globalThis.fetch } 
       });
       const body = await res.text();
       try { json = JSON.parse(body); } catch { return { error: `STT ${res.status}: ${body.slice(0, 300)}` }; }
-      if (!res.ok) return { error: `STT ${res.status}: ${json.error?.message || json.error || body.slice(0, 300)}` };
+      if (!res.ok) return { error: `STT ${res.status}: ${errorText(json.error) || body.slice(0, 300)}` };
     } catch (err) {
       const gone = err.cause?.code === 'ECONNREFUSED' || /fetch failed/i.test(err.message);
       return { error: gone ? `parakeet not running on :${PORTS.STT_PORT} — run: npm start` : err.message };
@@ -302,18 +356,29 @@ export function cuesToSrt(cues) {
 }
 
 /**
+ * Audio format for a save path: `.mp3` stays MP3, anything else is WAV.
+ * @param {string} [file]
+ * @returns {'mp3'|'wav'}
+ */
+export function formatForPath(file) {
+  return /\.mp3$/i.test(String(file || '')) ? 'mp3' : 'wav';
+}
+
+/**
  * @param {object} opts
  * @param {string} opts.text
  * @param {string} [opts.voice]
+ * @param {'wav'|'mp3'|'pcm'} [opts.format] koko response_format; koko's default is MP3
  * @param {typeof fetch} [opts.fetchFn]
  * @returns {Promise<{ audioBase64: string, contentType: string }|{ error: string }>}
  */
-export async function speak({ text, voice, fetchFn = globalThis.fetch } = {}) {
+export async function speak({ text, voice, format, fetchFn = globalThis.fetch } = {}) {
   if (typeof text !== 'string' || !text.trim()) {
     return { error: 'text (string) required' };
   }
   const body = { input: text.trim(), model: 'kokoro' };
   if (voice) body.voice = voice;
+  if (format) body.response_format = format;
 
   try {
     const res = await fetchFn(`${TTS}/v1/audio/speech`, {

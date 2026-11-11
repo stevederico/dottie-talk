@@ -2,6 +2,7 @@ import { describe, it, after } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   transcribe, transcribeWords, parseWav, chunkWav, wordsToCues, cuesToSrt, speak, TALK_PORTS,
+  toPcm16Wav, errorText, formatForPath,
 } from './core.js';
 import { sttBackend } from './bin_supervise.js';
 
@@ -47,7 +48,7 @@ describe('transcribe', () => {
         text: async () => JSON.stringify({ text: 'hello' }),
       });
       const r = await transcribe({
-        wavBuffer: Buffer.from('RIFF'),
+        wavBuffer: testWav(1),
         fetchFn,
       });
       assert.equal(r.text, 'hello');
@@ -68,7 +69,7 @@ describe('transcribe', () => {
         return { stdout: 'hello from voxtype\n', stderr: '' };
       };
       const r = await transcribe({
-        wavBuffer: Buffer.from('RIFF'),
+        wavBuffer: testWav(1),
         execFileFn,
       });
       assert.equal(r.text, 'hello from voxtype');
@@ -94,6 +95,67 @@ function testWav(sec, sampleRate = 1000, silentAt = -1) {
   h.write('data', 36, 'ascii'); h.writeUInt32LE(data.length, 40);
   return Buffer.concat([h, data]);
 }
+
+describe('toPcm16Wav', () => {
+  it('passes PCM16 WAV through without ffmpeg', async () => {
+    const buf = testWav(1);
+    const execFileFn = async () => { throw new Error('should not run'); };
+    const r = await toPcm16Wav(buf, { execFileFn });
+    assert.equal(r.wav, buf);
+  });
+
+  it('converts other audio with ffmpeg to 16 kHz mono PCM16', async () => {
+    const { writeFileSync } = await import('node:fs');
+    let seen;
+    const execFileFn = async (cmd, args) => {
+      seen = { cmd, args };
+      writeFileSync(args[args.length - 1], testWav(1));
+      return { stdout: '', stderr: '' };
+    };
+    const r = await toPcm16Wav(Buffer.from('ID3 mp3 bytes'), { execFileFn });
+    assert.equal(seen.cmd, 'ffmpeg');
+    assert.deepEqual(seen.args.slice(-8, -1), ['-vn', '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le']);
+    assert.equal(parseWav(r.wav).bits, 16);
+  });
+
+  it('explains a missing ffmpeg for non-WAV input', async () => {
+    const execFileFn = async () => { const e = new Error('spawn ffmpeg ENOENT'); e.code = 'ENOENT'; throw e; };
+    const r = await toPcm16Wav(Buffer.from('ID3 mp3 bytes'), { execFileFn });
+    assert.match(r.error, /not WAV and ffmpeg is not installed/);
+  });
+
+  it('reports ffmpeg decode errors', async () => {
+    const execFileFn = async () => { const e = new Error('exit 1'); e.stderr = 'Invalid data found'; throw e; };
+    const r = await toPcm16Wav(Buffer.from('junk'), { execFileFn });
+    assert.match(r.error, /cannot decode audio: Invalid data found/);
+  });
+});
+
+describe('errorText', () => {
+  it('reads strings and OpenAI-style error objects', () => {
+    assert.equal(errorText('bad'), 'bad');
+    assert.equal(errorText({ message: 'WAV only', type: 'invalid_request_error' }), 'WAV only');
+    assert.equal(errorText({ code: 7 }), '{"code":7}');
+    assert.equal(errorText(undefined), '');
+  });
+
+  it('surfaces the parakeet error message instead of [object Object]', async () => {
+    const prev = process.env.DOTTIE_STT;
+    process.env.DOTTIE_STT = 'parakeet';
+    try {
+      const fetchFn = async () => ({
+        ok: false,
+        status: 400,
+        text: async () => JSON.stringify({ error: { message: 'could not decode audio' } }),
+      });
+      const r = await transcribe({ wavBuffer: testWav(1), fetchFn });
+      assert.equal(r.error, 'STT 400: could not decode audio');
+    } finally {
+      if (prev === undefined) delete process.env.DOTTIE_STT;
+      else process.env.DOTTIE_STT = prev;
+    }
+  });
+});
 
 describe('parseWav / chunkWav', () => {
   it('reads the fmt and data chunks', () => {
@@ -206,5 +268,27 @@ describe('speak', () => {
     const r = await speak({ text: 'hi', fetchFn });
     assert.equal(r.contentType, 'audio/wav');
     assert.equal(Buffer.from(r.audioBase64, 'base64').toString(), 'wav-bytes');
+  });
+
+  it('sends response_format when format is set', async () => {
+    let sent;
+    const fetchFn = async (_url, init) => {
+      sent = JSON.parse(init.body);
+      return { ok: true, status: 200, arrayBuffer: async () => Buffer.from('x'), headers: { get: () => 'audio/wav' } };
+    };
+    await speak({ text: 'hi', format: 'wav', fetchFn });
+    assert.equal(sent.response_format, 'wav');
+    await speak({ text: 'hi', fetchFn });
+    assert.equal(sent.response_format, undefined);
+  });
+});
+
+describe('formatForPath', () => {
+  it('keeps .mp3 as MP3 and makes everything else WAV', () => {
+    assert.equal(formatForPath('a.mp3'), 'mp3');
+    assert.equal(formatForPath('A.MP3'), 'mp3');
+    assert.equal(formatForPath('a.wav'), 'wav');
+    assert.equal(formatForPath(''), 'wav');
+    assert.equal(formatForPath(undefined), 'wav');
   });
 });
