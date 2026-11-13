@@ -57,10 +57,16 @@ export function isNativeBin(p) {
   return true;
 }
 
-/** Linux keeps Darwin `koko` in git and fetches `koko-linux-x86_64` on first start. */
+/** File name of the Linux koko for this CPU, as `uname -m` spells it. */
+export function kokoLinuxName(arch = process.arch) {
+  const cpu = { x64: 'x86_64', arm64: 'aarch64' }[arch] || arch;
+  return `koko-linux-${cpu}`;
+}
+
+/** Linux keeps Darwin `koko` in git and fetches `koko-linux-<arch>` on first start. */
 export function kokoCandidates(dir) {
   if (process.platform === 'linux') {
-    return [path.join(dir, 'koko-linux-x86_64'), path.join(dir, 'koko')];
+    return [path.join(dir, kokoLinuxName()), path.join(dir, 'koko')];
   }
   return [path.join(dir, 'koko')];
 }
@@ -422,7 +428,7 @@ function killWedgedTts() {
     children.tts = null;
   }
   try {
-    execSync("pkill -9 -f '[k]oko-linux-x86_64|[k]oko openai --port'", {
+    execSync("pkill -9 -f '[k]oko-linux-|[k]oko openai --port'", {
       stdio: 'ignore',
       timeout: 2000,
     });

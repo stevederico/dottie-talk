@@ -1,3 +1,7 @@
+0.29.0
+
+  Support ARM Linux koko
+
 0.28.0
 
   Write real WAV

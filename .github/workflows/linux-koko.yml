@@ -12,7 +12,15 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -24,6 +32,25 @@ jobs:
             libopus-dev libsonic-dev libpcaudio-dev patchelf
       - name: Build and pack koko
         run: bash scripts/build_linux_koko.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: koko-linux-${{ matrix.arch }}
+          path: dist/koko-linux-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+  # One release holds both tarballs, so it is published once, after both
+  # builds. Branch pushes only build; the release moves on the default branch
+  # or by hand.
+  publish:
+    needs: build
+    if: github.ref_name == github.event.repository.default_branch || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
       - name: Publish linux-bins release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -31,6 +58,7 @@ jobs:
           gh release delete linux-bins --yes || true
           git tag -f linux-bins
           git push -f origin linux-bins
-          gh release create linux-bins dist/koko-linux-x86_64.tar.gz \
+          gh release create linux-bins \
+            dist/koko-linux-x86_64.tar.gz dist/koko-linux-aarch64.tar.gz \
             --title "Linux koko (prebuilt)" \
-            --notes "Native koko + bundled libsonic/pcaudio/opus. install_bins.sh downloads this. No sudo on the user machine."
+            --notes "Native koko for x86_64 and aarch64, with bundled libsonic/pcaudio/opus. install_bins.sh downloads the one for this CPU. No sudo on the user machine."
