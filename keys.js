@@ -10,7 +10,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
-import { PCM_FORMAT, speak } from './core.js';
+import { PCM_FORMAT, speak, voxtypeFailure } from './core.js';
 import { ensureTtsRunning } from './bin_supervise.js';
 import { loadConfig } from './config.js';
 
@@ -338,12 +338,7 @@ export async function dictate({ execFileFn = execFileAsync, mode = 'toggle', not
     return { ok: true, mode: verb };
   } catch (err) {
     const msg = err && err.message ? String(err.message) : String(err);
-    if (/ENOENT|not found/i.test(msg) || err.code === 'ENOENT') {
-      const error = 'voxtype missing — restart talk so it can download the binary';
-      notifyFn(error);
-      return { error };
-    }
-    const error = `voxtype: ${msg.slice(0, 300)}`;
+    const error = voxtypeFailure(msg, err && err.code);
     notifyFn(error);
     return { error };
   }

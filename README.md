@@ -40,7 +40,7 @@ npx transcribe hello.wav
 
 Node ≥22. Override STT with `DOTTIE_STT=voxtype` or `DOTTIE_STT=parakeet`.
 
-Linux: if `voxtype` is already on PATH, talk uses it. If not, on x86_64 first start downloads the AVX2 binary into `~/.cache/dottie-talk/bin` and `base.en` (no sudo, no pacman); on ARM install `voxtype` yourself. `npm start` skips the Darwin `bin/koko` and downloads the linux-bins ELF the same way. Streaming/multipart STT needs parakeet — buffered JSON `/v1/audio/transcriptions` works on both.
+Linux: if `voxtype` is already on PATH, talk uses it, and downloads `base.en` on first start when that voxtype has no model yet. If not, on x86_64 first start downloads the AVX2 binary into `~/.cache/dottie-talk/bin` and `base.en` (no sudo, no pacman); on ARM install `voxtype` yourself. `npm start` skips the Darwin `bin/koko` and downloads the linux-bins ELF the same way. Streaming/multipart STT needs parakeet — buffered JSON `/v1/audio/transcriptions` works on both.
 
 ## MCP
 

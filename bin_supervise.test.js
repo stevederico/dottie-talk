@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   dirHasRequiredBins, isNativeBin, kokoCandidates, kokoEspeakEnv, kokoLinuxName, sttState, ttsState, voxtypeFetchSpec,
+  voxtypeHasModel, voxtypeModelDir, voxtypeModelName,
 } from './bin_supervise.js';
 
 describe('kokoEspeakEnv', () => {
@@ -64,6 +65,29 @@ describe('voxtypeFetchSpec', () => {
     assert.match(spec.url, /voxtype-1\.0\.1-linux-x86_64-avx2$/);
     assert.equal(spec.bytes, 18245408);
     assert.equal(spec.model, 'base.en');
+  });
+});
+
+describe('voxtype model', () => {
+  it('looks under XDG_DATA_HOME', () => {
+    assert.equal(voxtypeModelDir({ XDG_DATA_HOME: '/data' }), '/data/voxtype/models');
+  });
+
+  it('has no model in a missing or empty folder', () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'dottie-vox-'));
+    assert.equal(voxtypeHasModel(path.join(dir, 'nope')), false);
+    assert.equal(voxtypeHasModel(dir), false);
+    writeFileSync(path.join(dir, 'CACHEDIR.TAG'), 'x');
+    assert.equal(voxtypeHasModel(dir), false);
+    writeFileSync(path.join(dir, 'ggml-base.en.bin'), 'x');
+    assert.equal(voxtypeHasModel(dir), true);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('defaults to base.en and rejects odd names', () => {
+    assert.equal(voxtypeModelName({}), 'base.en');
+    assert.equal(voxtypeModelName({ DOTTIE_VOXTYPE_MODEL: 'small.en' }), 'small.en');
+    assert.equal(voxtypeModelName({ DOTTIE_VOXTYPE_MODEL: 'a b; rm' }), 'base.en');
   });
 });
 
