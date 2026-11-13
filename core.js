@@ -49,6 +49,23 @@ export async function transcribe({
 }
 
 /**
+ * One line that says what to fix when a voxtype call fails. A voxtype with no
+ * model also prints "not found", so that case is checked before the binary one.
+ * @param {string} msg  stderr or error message
+ * @param {string} [code]  error code, e.g. ENOENT
+ */
+export function voxtypeFailure(msg, code) {
+  const text = String(msg || '');
+  if (/model/i.test(text) && /not found|voxtype setup/i.test(text)) {
+    return 'voxtype has no speech model — restart talk to download it, or run: voxtype setup --download --model base.en';
+  }
+  if (code === 'ENOENT' || /ENOENT|not found/i.test(text)) {
+    return 'voxtype missing — restart talk so it can download the binary';
+  }
+  return `voxtype: ${text.slice(0, 300)}`;
+}
+
+/**
  * @param {Buffer|Uint8Array} buf
  * @param {(file: string, args: string[], opts?: object) => Promise<{ stdout: string, stderr: string }>} execFileFn
  */
@@ -69,12 +86,7 @@ async function transcribeVoxtype(buf, execFileFn) {
     return { text };
   } catch (err) {
     const msg = err.stderr ? String(err.stderr).trim() : err.message;
-    if (/ENOENT|not found/i.test(msg) || err.code === 'ENOENT') {
-      return {
-        error: 'voxtype missing — restart talk so it can download the binary',
-      };
-    }
-    return { error: `voxtype: ${String(msg).slice(0, 300)}` };
+    return { error: voxtypeFailure(msg, err.code) };
   } finally {
     try { rmSync(dir, { recursive: true, force: true }); } catch { /* ok */ }
   }

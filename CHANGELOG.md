@@ -1,3 +1,8 @@
+0.30.0
+
+  Download missing voxtype model
+  Name the missing model in errors
+
 0.29.0
 
   Support ARM Linux koko

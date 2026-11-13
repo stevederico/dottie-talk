@@ -136,15 +136,54 @@ function voxtypeOnPath() {
 const VOXTYPE_VERSION = '1.0.1';
 const VOXTYPE_AVX2_BYTES = 18245408;
 
+/** Whisper model talk asks voxtype for. DOTTIE_VOXTYPE_MODEL overrides. */
+export function voxtypeModelName(env = process.env) {
+  const model = (env.DOTTIE_VOXTYPE_MODEL || 'base.en').trim();
+  return /^[A-Za-z0-9._-]+$/.test(model) ? model : 'base.en';
+}
+
+/** Where voxtype keeps downloaded models. It follows XDG_DATA_HOME. */
+export function voxtypeModelDir(env = process.env) {
+  return path.join(env.XDG_DATA_HOME || path.join(HOME, '.local', 'share'), 'voxtype', 'models');
+}
+
+/** True when voxtype has any model on disk. A fresh package install has none. */
+export function voxtypeHasModel(dir = voxtypeModelDir()) {
+  try {
+    return readdirSync(dir).some((f) => f !== 'CACHEDIR.TAG');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A voxtype from the system package ships without a model, and every
+ * transcribe then fails. Download the default one once. A failure here is
+ * logged, not thrown: TTS and the HTTP server should still come up.
+ */
+function ensureVoxtypeModel(bin) {
+  if (voxtypeHasModel()) return;
+  const model = voxtypeModelName();
+  log(`voxtype has no model — downloading ${model}`);
+  try {
+    execFileSync(bin, ['setup', '--download', '--model', model, '--quiet', '--no-post-install'], {
+      stdio: 'inherit',
+      timeout: 600_000,
+      env: process.env,
+    });
+  } catch (err) {
+    log(`voxtype model download failed (${err.message}) — run: voxtype setup --download --model ${model}`);
+  }
+}
+
 export function voxtypeFetchSpec() {
   if (process.platform !== 'linux' || process.arch !== 'x64') return null;
-  const model = (process.env.DOTTIE_VOXTYPE_MODEL || 'base.en').trim();
   return {
     version: VOXTYPE_VERSION,
     url: process.env.VOXTYPE_URL
       || `https://github.com/peteonrails/voxtype/releases/download/v${VOXTYPE_VERSION}/voxtype-${VOXTYPE_VERSION}-linux-x86_64-avx2`,
     bytes: VOXTYPE_AVX2_BYTES,
-    model: /^[A-Za-z0-9._-]+$/.test(model) ? model : 'base.en',
+    model: voxtypeModelName(),
     dest: path.join(DATA_DIR, 'bin', 'voxtype'),
   };
 }
@@ -311,6 +350,7 @@ function track(name, proc) {
 export async function ensureVoxtypeReady() {
   if (voxtypeOnPath()) {
     log('STT backend=voxtype (already on PATH)');
+    ensureVoxtypeModel('voxtype');
     return true;
   }
   const spec = voxtypeFetchSpec();

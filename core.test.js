@@ -2,7 +2,7 @@ import { describe, it, after } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   transcribe, transcribeWords, parseWav, chunkWav, wordsToCues, cuesToSrt, speak, TALK_PORTS,
-  toPcm16Wav, errorText, formatForPath,
+  toPcm16Wav, errorText, formatForPath, voxtypeFailure,
 } from './core.js';
 import { sttBackend } from './bin_supervise.js';
 
@@ -52,6 +52,24 @@ describe('transcribe', () => {
         fetchFn,
       });
       assert.equal(r.text, 'hello');
+    } finally {
+      if (prev === undefined) delete process.env.DOTTIE_STT;
+      else process.env.DOTTIE_STT = prev;
+    }
+  });
+
+  it('says the model is missing, not the binary, when voxtype has no model', async () => {
+    const prev = process.env.DOTTIE_STT;
+    process.env.DOTTIE_STT = 'voxtype';
+    try {
+      const execFileFn = async () => {
+        const err = new Error('Command failed: voxtype transcribe');
+        err.stderr = "Error: Model 'base.en' not found. Looked in:\n  - models/ggml-base.en.bin\n  Run 'voxtype setup' to download models.";
+        throw err;
+      };
+      const r = await transcribe({ wavBuffer: testWav(1), execFileFn });
+      assert.match(r.error, /no speech model/);
+      assert.doesNotMatch(r.error, /download the binary/);
     } finally {
       if (prev === undefined) delete process.env.DOTTIE_STT;
       else process.env.DOTTIE_STT = prev;
@@ -290,5 +308,15 @@ describe('formatForPath', () => {
     assert.equal(formatForPath('a.wav'), 'wav');
     assert.equal(formatForPath(''), 'wav');
     assert.equal(formatForPath(undefined), 'wav');
+  });
+});
+
+describe('voxtypeFailure', () => {
+  it('reports a missing binary', () => {
+    assert.match(voxtypeFailure('spawn voxtype ENOENT', 'ENOENT'), /voxtype missing/);
+  });
+
+  it('passes other errors through', () => {
+    assert.equal(voxtypeFailure('Ill-formed WAVE file'), 'voxtype: Ill-formed WAVE file');
   });
 });
