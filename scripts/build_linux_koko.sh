@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# CI helper: build koko for Linux x86_64 and pack it with the .so files it needs.
-# Output: dist/koko-linux-x86_64.tar.gz  (koko + lib/*.so)
+# CI helper: build koko for this Linux machine (x86_64 or aarch64) and pack it
+# with the .so files it needs.
+# Output: dist/koko-linux-<arch>.tar.gz  (koko + lib/*.so)
 # No sudo. Expects build deps already installed (GitHub Actions apt, or a fat machine).
 
 set -euo pipefail
@@ -11,7 +12,10 @@ CACHE_DIR="${HOME}/.dottie-build-cache"
 STAGING="${CACHE_DIR}/kokoros-src"
 KOKOROS_REF="${KOKOROS_REF:-main}"
 DIST="${PKG_ROOT}/dist"
-STAGE="${DIST}/koko-linux-x86_64"
+ARCH="$(uname -m)"
+[ "$ARCH" = "arm64" ] && ARCH="aarch64"
+NAME="koko-linux-${ARCH}"
+STAGE="${DIST}/${NAME}"
 
 log() { printf '[linux-koko] %s\n' "$*" >&2; }
 die() { printf '[linux-koko] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -71,5 +75,5 @@ if command -v patchelf >/dev/null; then
 fi
 
 mkdir -p "$DIST"
-tar -C "$STAGE" -czf "$DIST/koko-linux-x86_64.tar.gz" koko lib
-log "wrote $DIST/koko-linux-x86_64.tar.gz ($(du -h "$DIST/koko-linux-x86_64.tar.gz" | awk '{print $1}'))"
+tar -C "$STAGE" -czf "$DIST/${NAME}.tar.gz" koko lib
+log "wrote $DIST/${NAME}.tar.gz ($(du -h "$DIST/${NAME}.tar.gz" | awk '{print $1}'))"

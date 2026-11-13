@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  dirHasRequiredBins, isNativeBin, kokoCandidates, kokoEspeakEnv, sttState, ttsState, voxtypeFetchSpec,
+  dirHasRequiredBins, isNativeBin, kokoCandidates, kokoEspeakEnv, kokoLinuxName, sttState, ttsState, voxtypeFetchSpec,
 } from './bin_supervise.js';
 
 describe('kokoEspeakEnv', () => {
@@ -48,7 +48,7 @@ describe('dirHasRequiredBins', () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), 'dottie-bins-'));
     writeFileSync(path.join(dir, 'koko'), Buffer.from([0xcf, 0xfa, 0xed, 0xfe]));
     assert.equal(dirHasRequiredBins(dir), false);
-    writeFileSync(path.join(dir, 'koko-linux-x86_64'), Buffer.from([0x7f, 0x45, 0x4c, 0x46]));
+    writeFileSync(path.join(dir, kokoLinuxName()), Buffer.from([0x7f, 0x45, 0x4c, 0x46]));
     assert.equal(dirHasRequiredBins(dir), true);
     rmSync(dir, { recursive: true, force: true });
   });
@@ -67,11 +67,18 @@ describe('voxtypeFetchSpec', () => {
   });
 });
 
+describe('kokoLinuxName', () => {
+  it('names the binary the way uname -m spells the CPU', () => {
+    assert.equal(kokoLinuxName('x64'), 'koko-linux-x86_64');
+    assert.equal(kokoLinuxName('arm64'), 'koko-linux-aarch64');
+  });
+});
+
 describe('kokoCandidates', () => {
-  it('prefers koko-linux-x86_64 on Linux', () => {
+  it('prefers the koko for this CPU on Linux', () => {
     const names = kokoCandidates('/tmp/bin').map((p) => path.basename(p));
     if (process.platform === 'linux') {
-      assert.deepEqual(names, ['koko-linux-x86_64', 'koko']);
+      assert.deepEqual(names, [kokoLinuxName(), 'koko']);
     } else {
       assert.deepEqual(names, ['koko']);
     }

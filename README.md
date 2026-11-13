@@ -14,7 +14,7 @@ Bins ship in `bin/` (macOS). Models download on first boot (`~/.cache/parakeet.c
 | Platform | STT | TTS |
 |---|---|---|
 | Apple Silicon (darwin) | `parakeet-server` `:1315` (bundled) | `koko` `:1314` |
-| Omarchy / Linux | `voxtype` (PATH, else fetched AVX2 binary + `base.en`) | `koko` `:1314` (ELF fetched on first start as `bin/koko-linux-x86_64`) |
+| Omarchy / Linux | `voxtype` (PATH, else fetched AVX2 binary + `base.en`) | `koko` `:1314` (ELF fetched on first start as `bin/koko-linux-<arch>`, x86_64 or aarch64) |
 
 | Command | What |
 |---|---|
@@ -40,7 +40,7 @@ npx transcribe hello.wav
 
 Node ≥22. Override STT with `DOTTIE_STT=voxtype` or `DOTTIE_STT=parakeet`.
 
-Linux: if `voxtype` is already on PATH, talk uses it. If not, first start downloads the x86_64 AVX2 binary into `~/.cache/dottie-talk/bin` and `base.en` (no sudo, no pacman). `npm start` skips the Darwin `bin/koko` and downloads the linux-bins ELF the same way. Streaming/multipart STT needs parakeet — buffered JSON `/v1/audio/transcriptions` works on both.
+Linux: if `voxtype` is already on PATH, talk uses it. If not, on x86_64 first start downloads the AVX2 binary into `~/.cache/dottie-talk/bin` and `base.en` (no sudo, no pacman); on ARM install `voxtype` yourself. `npm start` skips the Darwin `bin/koko` and downloads the linux-bins ELF the same way. Streaming/multipart STT needs parakeet — buffered JSON `/v1/audio/transcriptions` works on both.
 
 ## MCP
 

@@ -105,12 +105,15 @@ is_native_koko() {
 }
 
 # Prebuilt Linux koko + bundled .so (no pacman). GitHub Actions publishes linux-bins.
-# Linux writes koko-linux-x86_64 so git's Darwin bin/koko stays put.
-KOKO_LINUX_URL="${KOKO_LINUX_URL:-https://github.com/stevederico/dottie-talk/releases/download/linux-bins/koko-linux-x86_64.tar.gz}"
+# Linux writes koko-linux-<arch> (x86_64 or aarch64) so git's Darwin bin/koko stays put.
+KOKO_LINUX_ARCH="$(uname -m)"
+[ "$KOKO_LINUX_ARCH" = "arm64" ] && KOKO_LINUX_ARCH="aarch64"
+KOKO_LINUX_NAME="koko-linux-${KOKO_LINUX_ARCH}"
+KOKO_LINUX_URL="${KOKO_LINUX_URL:-https://github.com/stevederico/dottie-talk/releases/download/linux-bins/${KOKO_LINUX_NAME}.tar.gz}"
 
 koko_dest() {
   case "$(uname -s)" in
-    Linux) printf '%s\n' "$OUT/koko-linux-x86_64" ;;
+    Linux) printf '%s\n' "$OUT/$KOKO_LINUX_NAME" ;;
     *) printf '%s\n' "$OUT/koko" ;;
   esac
 }
@@ -121,7 +124,7 @@ install_koko_linux_prebuilt() {
   local tmp tarball dest
   dest=$(koko_dest)
   tmp=$(mktemp -d)
-  tarball="$tmp/koko-linux-x86_64.tar.gz"
+  tarball="$tmp/${KOKO_LINUX_NAME}.tar.gz"
   log "download $KOKO_LINUX_URL"
   if command -v curl >/dev/null; then
     curl -fsSL "$KOKO_LINUX_URL" -o "$tarball" || { rm -rf "$tmp"; return 1; }
@@ -196,4 +199,4 @@ if [ -z "${SKIP_KOKO:-}" ]; then
 fi
 
 log "done. $OUT"
-ls -lh "$OUT/parakeet-server" "$OUT/koko" "$OUT/koko-linux-x86_64" 2>/dev/null || ls -lh "$(koko_dest)" 2>/dev/null || true
+ls -lh "$OUT/parakeet-server" "$OUT/koko" "$OUT/$KOKO_LINUX_NAME" 2>/dev/null || ls -lh "$(koko_dest)" 2>/dev/null || true
