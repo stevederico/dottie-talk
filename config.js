@@ -15,13 +15,24 @@ export const DEFAULT_KEYS = Object.freeze({
   voice: '',
 });
 
+export const DEFAULT_SPEED = 1;
+export const MIN_SPEED = 0.5;
+export const MAX_SPEED = 2;
+
+/** Clamp to koko's useful range; anything non-numeric → 1. */
+export function parseSpeed(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_SPEED;
+  return Math.min(MAX_SPEED, Math.max(MIN_SPEED, Math.round(n * 100) / 100));
+}
+
 export function configPath() {
   if (process.env.DOTTIE_TALK_CONFIG) return process.env.DOTTIE_TALK_CONFIG;
   return path.join(os.homedir(), '.config', 'dottie-talk', 'config.json');
 }
 
 export function defaultConfig() {
-  return { keys: { ...DEFAULT_KEYS } };
+  return { keys: { ...DEFAULT_KEYS }, speed: DEFAULT_SPEED };
 }
 
 function parseKeys(raw) {
@@ -53,13 +64,13 @@ export function loadConfig() {
   }
   const keys = parseKeys(parsed.keys);
   keys.enabled = envKeysOverride(keys.enabled);
-  return { keys };
+  return { keys, speed: parseSpeed(parsed.speed ?? DEFAULT_SPEED) };
 }
 
 export function saveConfig(cfg) {
   const file = configPath();
   mkdirSync(path.dirname(file), { recursive: true });
-  const next = { keys: parseKeys(cfg && cfg.keys) };
+  const next = { keys: parseKeys(cfg && cfg.keys), speed: parseSpeed(cfg && cfg.speed) };
   writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`);
   return loadConfig();
 }
@@ -72,6 +83,12 @@ export function setKeysEnabled(enabled) {
   if (!current.keys.dictate) current.keys.dictate = DEFAULT_KEYS.dictate;
   const file = configPath();
   mkdirSync(path.dirname(file), { recursive: true });
-  writeFileSync(file, `${JSON.stringify({ keys: current.keys }, null, 2)}\n`);
+  writeFileSync(file, `${JSON.stringify({ keys: current.keys, speed: current.speed }, null, 2)}\n`);
   return loadConfig();
+}
+
+export function setSpeed(speed) {
+  const current = loadConfig();
+  current.speed = parseSpeed(speed);
+  return saveConfig(current);
 }

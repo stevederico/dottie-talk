@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { DEFAULT_KEYS, loadConfig, saveConfig, setKeysEnabled } from './config.js';
+import { DEFAULT_KEYS, loadConfig, parseSpeed, saveConfig, setKeysEnabled, setSpeed } from './config.js';
 
 function isolate() {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'dottie-talk-config-'));
@@ -86,5 +86,27 @@ describe('setKeysEnabled', () => {
     saveConfig({ keys: { enabled: false, dictate: '' } });
     const cfg = setKeysEnabled(true);
     assert.equal(cfg.keys.dictate, DEFAULT_KEYS.dictate);
+  });
+});
+
+describe('speed', () => {
+  let restore;
+  afterEach(() => restore?.());
+
+  it('defaults to 1 and clamps to 0.5-2', () => {
+    assert.equal(parseSpeed(undefined), 1);
+    assert.equal(parseSpeed('abc'), 1);
+    assert.equal(parseSpeed(0.1), 0.5);
+    assert.equal(parseSpeed(5), 2);
+    assert.equal(parseSpeed('1.25'), 1.25);
+  });
+
+  it('persists and survives a keys toggle', () => {
+    restore = isolate();
+    assert.equal(loadConfig().speed, 1);
+    setSpeed(1.5);
+    setKeysEnabled(true);
+    assert.equal(loadConfig().speed, 1.5);
+    assert.equal(loadConfig().keys.enabled, true);
   });
 });

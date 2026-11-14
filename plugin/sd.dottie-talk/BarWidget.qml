@@ -19,6 +19,7 @@ BarWidget {
   property bool keysArmed: false
   property string speakChord: "ALT + S"
   property string dictateChord: "ALT + D"
+  property real speed: 1
   property bool speakingFile: false
   property bool processingFile: false
 
@@ -56,6 +57,7 @@ BarWidget {
     tts = next.tts
     keysEnabled = next.keysEnabled
     keysArmed = next.keysArmed
+    speed = next.speed
     if (next.speak) speakChord = next.speak
     if (next.dictate) dictateChord = next.dictate
     if (!next.running) root.close()
@@ -75,6 +77,11 @@ BarWidget {
     root.clickLock = true
     clickLockTimer.restart()
     root.popupOpen = !root.popupOpen
+  }
+
+  function setSpeed(value) {
+    root.speed = value
+    root.runTalk(["speed", String(value)])
   }
 
   function triggerPress(button) { root.handlePress(button) }
@@ -217,6 +224,33 @@ BarWidget {
         foreground: root.bar.foreground
         fontFamily: root.bar.fontFamily
         onClicked: root.runTalk(["keys", root.keysEnabled ? "off" : "on"])
+      }
+
+      PanelSeparator { foreground: root.bar.foreground }
+
+      Text {
+        text: "Speed · " + root.speed + "×"
+        color: root.bar.foreground
+        font.family: root.bar.fontFamily
+        font.pixelSize: Style.font.caption
+      }
+
+      Row {
+        width: parent.width
+        spacing: Style.space(6)
+
+        Repeater {
+          model: [0.75, 1, 1.25, 1.5, 2]
+
+          Button {
+            required property real modelData
+            text: modelData + "×"
+            selected: Math.abs(root.speed - modelData) < 0.01
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            onClicked: root.setSpeed(modelData)
+          }
+        }
       }
 
       PanelSeparator { foreground: root.bar.foreground }

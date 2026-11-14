@@ -10,6 +10,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { PORTS } from './ports.js';
 import { sttBackend } from './bin_supervise.js';
+import { loadConfig, parseSpeed } from './config.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -384,13 +385,14 @@ export function formatForPath(file) {
  * @param {typeof fetch} [opts.fetchFn]
  * @returns {Promise<{ audioBase64: string, contentType: string }|{ error: string }>}
  */
-export async function speak({ text, voice, format, fetchFn = globalThis.fetch } = {}) {
+export async function speak({ text, voice, format, speed, fetchFn = globalThis.fetch } = {}) {
   if (typeof text !== 'string' || !text.trim()) {
     return { error: 'text (string) required' };
   }
   const body = { input: text.trim(), model: 'kokoro' };
   if (voice) body.voice = voice;
   if (format) body.response_format = format;
+  body.speed = parseSpeed(speed ?? loadConfig().speed);
 
   try {
     const res = await fetchFn(`${TTS}/v1/audio/speech`, {
@@ -430,12 +432,13 @@ export const PCM_FORMAT = { sampleRate: 24000, channels: 1, encoding: 's16le' };
  * @param {typeof fetch} [opts.fetchFn]
  * @returns {Promise<{ body: ReadableStream<Uint8Array> }|{ error: string }>}
  */
-export async function speakStream({ text, voice, fetchFn = globalThis.fetch } = {}) {
+export async function speakStream({ text, voice, speed, fetchFn = globalThis.fetch } = {}) {
   if (typeof text !== 'string' || !text.trim()) {
     return { error: 'text (string) required' };
   }
   const body = { input: text.trim(), model: 'kokoro', stream: true };
   if (voice) body.voice = voice;
+  body.speed = parseSpeed(speed ?? loadConfig().speed);
 
   try {
     const res = await fetchFn(`${TTS}/v1/audio/speech`, {

@@ -7,6 +7,7 @@ import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { isProcessing, isSpeaking, keysStatus } from './keys.js';
+import { loadConfig } from './config.js';
 import { PORTS } from './ports.js';
 
 export function talkDir() {
@@ -37,6 +38,7 @@ export function buildTalkState(bins = {}, extra = {}) {
     keysArmed: Boolean(keys.armed),
     speak: keys.speak || '',
     dictate: keys.dictate || '',
+    speed: loadConfig().speed,
     ...extra,
   };
 }
@@ -54,6 +56,7 @@ export function parseTalkState(raw) {
     keysArmed: false,
     speak: '',
     dictate: '',
+    speed: 1,
   };
   if (!raw) return fallback;
   try {

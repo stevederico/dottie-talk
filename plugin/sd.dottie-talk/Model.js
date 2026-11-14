@@ -10,7 +10,8 @@ function parseState(raw) {
     keysEnabled: false,
     keysArmed: false,
     speak: "",
-    dictate: ""
+    dictate: "",
+    speed: 1
   }
   if (!raw) return fallback
   try {
@@ -29,7 +30,8 @@ function parseState(raw) {
       keysEnabled: parsed.keysEnabled === true,
       keysArmed: parsed.keysArmed === true,
       speak: typeof parsed.speak === "string" ? parsed.speak : "",
-      dictate: typeof parsed.dictate === "string" ? parsed.dictate : ""
+      dictate: typeof parsed.dictate === "string" ? parsed.dictate : "",
+      speed: typeof parsed.speed === "number" && parsed.speed > 0 ? parsed.speed : 1
     }
   } catch (error) {
     return fallback

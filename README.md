@@ -26,6 +26,7 @@ Bins ship in `bin/` (macOS). Models download on first boot (`~/.cache/parakeet.c
 | `dottie-talk transcribe a.wav --srt` / `--json` | STT with per-word times → SRT captions or `{ text, words, segments }` (parakeet; long audio is chunked) |
 | `dottie-talk start` | same as `npm start` |
 | `dottie-talk health` | STT/TTS readiness JSON |
+| `dottie-talk speed [0.5-2]` | show or set speech speed (also in the menubar) |
 | `dottie-talk keys on` | enable talk-keys-style hotkeys (off by default) |
 | `dottie-talk keys off` | disable hotkeys |
 | `dottie-talk keys status` | enabled / armed / chords |

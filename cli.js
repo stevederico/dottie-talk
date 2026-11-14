@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { speak, transcribe, transcribeWords, wordsToCues, cuesToSrt, formatForPath } from './core.js';
 import { ensureBinsRunning, binsHealth } from './bin_supervise.js';
 import { PORTS } from './ports.js';
+import { loadConfig, setSpeed, MIN_SPEED, MAX_SPEED } from './config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -30,6 +31,7 @@ Usage:
   dottie-talk start
   dottie-talk health
   dottie-talk keys [on|off|status|speak|stop|dictate]
+  dottie-talk speed [0.5-2]      show or set speech speed (default 1)
   dottie-talk bar [on|off|status]
   dottie-talk stop
   dottie-talk help
@@ -86,6 +88,7 @@ export function parseArgs(argv) {
     text: cmd === 'speak' ? positionals.join(' ') : '',
     file: cmd === 'transcribe' ? (positionals[0] || '') : '',
     keysAction: cmd === 'keys' ? (positionals[0] || 'status') : '',
+    speedArg: cmd === 'speed' ? (positionals[0] || '') : '',
     barAction: cmd === 'bar' ? (positionals[0] || 'status') : '',
     out,
     voice,
@@ -170,6 +173,19 @@ async function cmdHealth() {
   process.exit(h.ok ? 0 : 1);
 }
 
+function cmdSpeed(arg) {
+  if (!arg) {
+    process.stdout.write(`${loadConfig().speed}\n`);
+    return;
+  }
+  const n = Number(arg);
+  if (!Number.isFinite(n) || n < MIN_SPEED || n > MAX_SPEED) {
+    process.stderr.write(`usage: speed [${MIN_SPEED}-${MAX_SPEED}]\n`);
+    process.exit(1);
+  }
+  process.stdout.write(`${setSpeed(n).speed}\n`);
+}
+
 async function cmdKeys(action) {
   const { runKeysCommand } = await import('./keys_hypr.js');
   const result = await runKeysCommand(action);
@@ -236,6 +252,9 @@ async function main() {
       break;
     case 'keys':
       await cmdKeys(opts.keysAction);
+      break;
+    case 'speed':
+      cmdSpeed(opts.speedArg);
       break;
     case 'stop':
       await cmdStop();

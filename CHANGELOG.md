@@ -1,3 +1,9 @@
+0.31.0
+
+  Add speech speed to the menubar
+  Add dottie-talk speed
+  Drop routine Talk notifications
+
 0.30.0
 
   Download missing voxtype model

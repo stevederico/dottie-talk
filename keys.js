@@ -298,8 +298,6 @@ export async function speakSelection({
     notifyFn('Nothing selected');
     return { empty: true };
   }
-  notifyFn(text.length > 72 ? `${text.slice(0, 72)}…` : text);
-
   markProcessing();
   try {
     await ensureTtsFn();
@@ -334,7 +332,6 @@ export async function dictate({ execFileFn = execFileAsync, mode = 'toggle', not
   const verb = mode === 'start' || mode === 'stop' ? mode : 'toggle';
   try {
     await execFileFn('voxtype', ['record', verb], { timeout: 5000, encoding: 'utf8' });
-    notifyFn(verb === 'start' ? 'Dictation on' : verb === 'stop' ? 'Dictation off' : 'Dictation toggle');
     return { ok: true, mode: verb };
   } catch (err) {
     const msg = err && err.message ? String(err.message) : String(err);

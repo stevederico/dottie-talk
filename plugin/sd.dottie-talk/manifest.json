@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "sd.dottie-talk",
   "name": "Talk",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "author": "sd",
   "license": "MIT",
-  "description": "dottie-talk menubar: speak, keys, stop. Icon only while the server is running.",
+  "description": "dottie-talk menubar: speak, keys, speed, stop. Icon only while the server is running.",
   "kinds": [
     "bar-widget"
   ],
