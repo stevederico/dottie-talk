@@ -51,6 +51,13 @@ describe('renderKeysLua', () => {
     assert.equal(lua.includes('hyprctl'), false);
   });
 
+  it('binds stop before the armed check so Escape works with keys off', () => {
+    const lua = renderKeysLua({ stop: 'ESCAPE', stopBin: '/tmp/speak-stop' });
+    assert.ok(lua.indexOf('Stop speak') < lua.indexOf('if not f then'));
+    assert.match(lua, /dottie-talk\/processing/);
+    assert.equal(lua.includes('Speak selection'), false);
+  });
+
   it('skips empty chords', () => {
     const lua = renderKeysLua({
       speak: '',
@@ -121,7 +128,7 @@ describe('enableKeys install', () => {
     process.env.DOTTIE_TALK_HYPR_DIR = path.join(dir, 'hypr');
     process.env.DOTTIE_TALK_USER_BIN = path.join(dir, 'bin');
     const { writeKeysLua } = await import('./keys_hypr.js');
-    const file = writeKeysLua();
+    const { file } = writeKeysLua();
     const old = new Date('2020-01-01T00:00:00Z');
     utimesSync(file, old, old);
     writeKeysLua();

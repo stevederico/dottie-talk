@@ -43,6 +43,38 @@ export function speakPidPath() {
   return path.join(dir, 'speak.pid');
 }
 
+/** Newest speak claim. A speak plays only while its claim is the newest. */
+export function speakSeqPath() {
+  return path.join(runtimeDir(), 'dottie-talk', 'speak.seq');
+}
+
+/** Time of the last stopSpeak. Claims made before it never play. */
+export function speakCancelPath() {
+  return path.join(runtimeDir(), 'dottie-talk', 'speak.cancel');
+}
+
+function readNum(file) {
+  try { return Number(readFileSync(file, 'utf8').trim()) || 0; } catch { return 0; }
+}
+
+/**
+ * Claim the speaker before generating audio. Returns a token for playWav /
+ * playPcmStream: a later claim, or Escape (stopSpeak) in between, drops this
+ * speak instead of letting it talk over the newer one.
+ */
+export function claimSpeak() {
+  const token = Math.max(Date.now(), readNum(speakSeqPath()) + 1, readNum(speakCancelPath()) + 1);
+  mkdirSync(path.dirname(speakSeqPath()), { recursive: true });
+  writeFileSync(speakSeqPath(), `${token}\n`);
+  return token;
+}
+
+/** True while token is the newest claim and no stop came after it. */
+export function claimCurrent(token) {
+  if (token == null) return true;
+  return token >= readNum(speakSeqPath()) && token > readNum(speakCancelPath());
+}
+
 export function processingPath() {
   return path.join(runtimeDir(), 'dottie-talk', 'processing');
 }
@@ -168,9 +200,12 @@ function whichPlayer(whichFn) {
 /**
  * Write WAV to a temp file and play it in the background.
  * Escape / stopSpeak can kill it like a hotkey speak.
- * @returns {{ pid: number, wavPath: string }|{ error: string }}
+ * Kills whatever is already playing, so speaks never overlap. Pass the token
+ * from claimSpeak to skip playing once a newer speak or a stop came in.
+ * @returns {{ pid: number, wavPath: string }|{ cancelled: true }|{ error: string }}
  */
-export function playWav(wav, { spawnFn = spawn, whichFn = binOnPath } = {}) {
+export function playWav(wav, { spawnFn = spawn, whichFn = binOnPath, killFn = process.kill, token } = {}) {
+  if (!claimCurrent(token)) return { cancelled: true };
   const bin = whichPlayer(whichFn);
   if (!bin) return { error: 'no audio player (pw-play, paplay, afplay, mpv, ffplay)' };
 
@@ -181,10 +216,11 @@ export function playWav(wav, { spawnFn = spawn, whichFn = binOnPath } = {}) {
   writeFileSync(wavPath, wav);
 
   const args = playerCommands(wavPath).find((c) => c[0] === bin).slice(1);
+  killPlayer({ killFn });
   const child = spawnFn(bin, args, { stdio: 'ignore', detached: true });
   child.unref?.();
   markSpeaking(child.pid);
-  child.on?.('exit', () => clearSpeaking());
+  child.on?.('exit', () => clearSpeakingIf(child.pid));
   return { pid: child.pid, wavPath };
 }
 
@@ -204,19 +240,26 @@ function pcmPlayerCommands({ sampleRate, channels }) {
 /**
  * Pipe raw PCM into a player that reads stdin. Playback starts on the first chunk.
  * @param {ReadableStream<Uint8Array>} body
- * @returns {{ pid: number, done: Promise<void> }|{ error: string }}
+ * @returns {{ pid: number, done: Promise<void> }|{ cancelled: true }|{ error: string }}
  */
 export function playPcmStream(body, {
   format = PCM_FORMAT,
   spawnFn = spawn,
   whichFn = binOnPath,
+  killFn = process.kill,
+  token,
 } = {}) {
+  if (!claimCurrent(token)) {
+    body?.cancel?.().catch?.(() => {});
+    return { cancelled: true };
+  }
   const cmd = pcmPlayerCommands(format).find((c) => whichFn(c[0]));
   if (!cmd) return { error: 'no streaming audio player (pw-cat, pacat, aplay, ffplay)' };
 
+  killPlayer({ killFn });
   const child = spawnFn(cmd[0], cmd.slice(1), { stdio: ['pipe', 'ignore', 'ignore'] });
   markSpeaking(child.pid);
-  child.on?.('exit', () => clearSpeaking());
+  child.on?.('exit', () => clearSpeakingIf(child.pid));
   // Player killed by Escape closes stdin; swallow EPIPE.
   child.stdin.on?.('error', () => {});
   const done = pipeline(Readable.fromWeb(body), child.stdin).catch(() => {});
@@ -235,6 +278,11 @@ export function clearSpeaking() {
   try { unlinkSync(speakPidPath()); } catch { /* ok */ }
   clearProcessing();
   bumpBarStatus('idle');
+}
+
+/** Clear only if pid still owns the speaker; a newer player replaced it otherwise. */
+export function clearSpeakingIf(pid) {
+  if (readNum(speakPidPath()) === pid) clearSpeaking();
 }
 
 export function isSpeaking() {
@@ -258,16 +306,30 @@ export function isSpeaking() {
   return false;
 }
 
-export function stopSpeak({ killFn = process.kill } = {}) {
-  let pid = 0;
-  try {
-    pid = Number(readFileSync(speakPidPath(), 'utf8').trim()) || 0;
-  } catch { /* ok */ }
+/**
+ * Kill the current player without cancelling speaks still generating.
+ * SIGKILL: pw-cat drains its buffer for about a second on SIGTERM, which
+ * talks over the next speak and makes Escape feel broken.
+ */
+function killPlayer({ killFn = process.kill } = {}) {
+  const pid = readNum(speakPidPath());
   if (pid > 1) {
-    try { killFn(pid, 'SIGTERM'); } catch { /* ok */ }
+    try { killFn(pid, 'SIGKILL'); } catch { /* ok */ }
   }
+  return pid > 1;
+}
+
+/**
+ * Escape. Kills playback and cancels any speak still generating, so it does
+ * not start talking a second later.
+ */
+export function stopSpeak({ killFn = process.kill } = {}) {
+  const pending = isProcessing();
+  mkdirSync(path.dirname(speakCancelPath()), { recursive: true });
+  writeFileSync(speakCancelPath(), `${Date.now()}\n`);
+  const killed = killPlayer({ killFn });
   clearSpeaking();
-  return { stopped: pid > 1 };
+  return { stopped: killed || pending };
 }
 
 function binOnPath(bin) {
@@ -298,6 +360,7 @@ export async function speakSelection({
     notifyFn('Nothing selected');
     return { empty: true };
   }
+  const token = claimSpeak();
   markProcessing();
   try {
     await ensureTtsFn();
@@ -307,7 +370,8 @@ export async function speakSelection({
       return { error: result.error };
     }
 
-    const played = playWav(Buffer.from(result.audioBase64, 'base64'), { spawnFn, whichFn });
+    const played = playWav(Buffer.from(result.audioBase64, 'base64'), { spawnFn, whichFn, token });
+    if (played.cancelled) return { cancelled: true };
     if (played.error) {
       notifyFn(played.error);
       return { error: played.error };

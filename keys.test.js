@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  claimSpeak,
   clearProcessing,
   clearSpeaking,
   dictate,
@@ -14,6 +15,7 @@ import {
   markSpeaking,
   pickText,
   playPcmStream,
+  playWav,
   readSelection,
   speakSelection,
   stopSpeak,
@@ -290,5 +292,54 @@ describe('playPcmStream', () => {
     restore = isolate();
     const r = playPcmStream(new ReadableStream(), { whichFn: () => false });
     assert.match(r.error, /no streaming audio player/);
+  });
+});
+
+describe('one voice at a time', () => {
+  let restore;
+  afterEach(() => restore?.());
+  const fakeChild = (pid) => ({ pid, stdin: new PassThrough(), on() {}, unref() {} });
+  const pcm = () => new ReadableStream({ start(c) { c.close(); } });
+
+  it('kills the current player before starting the next', () => {
+    restore = isolate();
+    const killed = [];
+    const opts = (pid) => ({
+      whichFn: (bin) => bin === 'pw-cat',
+      spawnFn: () => fakeChild(pid),
+      killFn: (p) => killed.push(p),
+    });
+    playPcmStream(pcm(), opts(11));
+    playPcmStream(pcm(), opts(12));
+    assert.deepEqual(killed, [11]);
+  });
+
+  it('drops an older speak that finishes after a newer one', () => {
+    restore = isolate();
+    const first = claimSpeak();
+    const second = claimSpeak();
+    const spawned = [];
+    const opts = (token) => ({
+      token,
+      whichFn: (bin) => bin === 'pw-play',
+      spawnFn: (bin) => { spawned.push(bin); return fakeChild(20); },
+      killFn: () => {},
+    });
+    assert.equal(playWav(Buffer.from('x'), opts(second)).pid, 20);
+    assert.deepEqual(playWav(Buffer.from('x'), opts(first)), { cancelled: true });
+    assert.equal(spawned.length, 1);
+  });
+
+  it('Escape cancels a speak still generating', () => {
+    restore = isolate();
+    const token = claimSpeak();
+    markProcessing();
+    assert.equal(stopSpeak({ killFn: () => {} }).stopped, true);
+    let cancelled = false;
+    const body = new ReadableStream({ cancel() { cancelled = true; } });
+    const r = playPcmStream(body, { token, whichFn: () => true, spawnFn: () => assert.fail('spawned') });
+    assert.deepEqual(r, { cancelled: true });
+    assert.equal(cancelled, true);
+    assert.ok(claimSpeak() > token, 'a speak after the stop still plays');
   });
 });

@@ -74,7 +74,7 @@ Read Claude's replies aloud through koko. `talk-back.js` runs as two Claude Code
 | `/talk stop` | stop playback |
 | `/talk status` | on or off |
 
-Stop it: type anything (the next prompt cuts playback off), `/talk stop`, or `/talk off`. On Linux with `dottie-talk keys on`, Escape stops it too.
+Stop it: type anything (the next prompt cuts playback off), `/talk stop`, or `/talk off`. On Linux (Hyprland), Escape stops it too.
 
 What is read: only the final reply. Never thinking, tool calls, or notes written between tool calls. Code blocks, tables, URLs, and markdown marks are dropped.
 
@@ -107,6 +107,8 @@ The Stop hook saves every reply and speaks it only when the mode is on. It retur
 
 ## Keys (Linux)
 
+One voice at a time: a new speak (MCP, talk-back, Alt+S) cuts off the one playing, and an older speak that finishes generating after a newer one is dropped.
+
 Talk-keys analog. **Off by default.** Enable, then keep `npm start` running so binds arm:
 
 ```bash
@@ -118,7 +120,7 @@ npm start
 |---|---|---|
 | Alt+S | Speak selection if present, else clipboard. Second tap stops. | Steals app Alt+S menu accelerators **while armed** |
 | Alt+D | Hold to dictate (voxtype push-to-talk) | Steals browser Alt+D address bar **while armed**; leaves Super+Ctrl+X / F9 alone |
-| Escape | Stop speak | Only consumed while playback is active |
+| Escape | Stop speak (also cancels one still generating) | **Always bound, even with keys off or the server down.** Only consumed while a speak is playing or generating |
 
 Config: `~/.config/dottie-talk/config.json`
 

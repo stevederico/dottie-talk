@@ -41,7 +41,7 @@ transcribe reads WAV, or any format ffmpeg reads (mp3, m4a, mp4...), and prints 
 { text, language, duration, segments, words } with per-word times (parakeet only).
 start runs the HTTP façade on :${PORTS.TALK_HTTP_PORT}.
 keys is off by default. on installs Hyprland binds; they arm while start is running.
-Speak Alt+S. Hold Alt+D to dictate. Escape stops speak.
+Speak Alt+S. Hold Alt+D to dictate. Escape always stops speak, even with keys off.
 stop ends the HTTP server. bar on puts the Omarchy menubar icon (visible while start is running).
 `;
   process.stderr.write(text);

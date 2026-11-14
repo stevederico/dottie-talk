@@ -17,7 +17,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { transcribe, speak, speakStream, formatForPath } from './core.js';
 import { ensureBinsRunning } from './bin_supervise.js';
-import { clearProcessing, markProcessing, playPcmStream, playWav } from './keys.js';
+import { claimSpeak, clearProcessing, markProcessing, playPcmStream, playWav } from './keys.js';
 
 export const TALK_TOOLS = [
   {
@@ -85,6 +85,7 @@ export async function callTool(name, args = {}, {
 
     // Plain "say this": stream PCM straight to the player.
     if (play && !out && !returnAudio) {
+      const token = claimSpeak();
       markProcessing();
       let result;
       try {
@@ -93,11 +94,13 @@ export async function callTool(name, args = {}, {
         clearProcessing();
       }
       if (result.error) return fail(result.error);
-      const played = playPcmStreamFn(result.body);
+      const played = playPcmStreamFn(result.body, { token });
+      if (played.cancelled) return ok('cancelled (stopped, or a newer speak took over)', { cancelled: true });
       if (played.error) return fail(played.error);
       return ok(`playing (pid ${played.pid})`, { playing: true, pid: played.pid });
     }
 
+    const token = play ? claimSpeak() : undefined;
     markProcessing();
     let result;
     try {
@@ -121,10 +124,15 @@ export async function callTool(name, args = {}, {
       structured.path = dest;
     }
     if (play) {
-      const played = playWavFn(audio);
+      const played = playWavFn(audio, { token });
       if (played.error) return fail(played.error);
-      lines.push(`playing (pid ${played.pid})`);
-      structured.pid = played.pid;
+      if (played.cancelled) {
+        lines.push('cancelled (stopped, or a newer speak took over)');
+        structured.cancelled = true;
+      } else {
+        lines.push(`playing (pid ${played.pid})`);
+        structured.pid = played.pid;
+      }
     }
     if (returnAudio) {
       structured.audioBase64 = result.audioBase64;
@@ -152,5 +160,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) =>
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
   await ensureBinsRunning();
+  const { ensureStopKey } = await import('./keys_hypr.js');
+  ensureStopKey().catch(() => {});
   await server.connect(new StdioServerTransport());
 }

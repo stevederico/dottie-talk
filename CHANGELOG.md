@@ -1,3 +1,10 @@
+0.32.0
+
+  Stop speaks talking over each other
+  Bind Escape to stop speak even with keys off
+  Escape cancels a speak still generating
+  Kill players with SIGKILL so they stop at once
+
 0.31.0
 
   Add speech speed to the menubar

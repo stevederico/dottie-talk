@@ -116,14 +116,19 @@ function speakDetached(text) {
 
 async function say(text) {
   const { speakStream } = await import('./core.js');
-  const { playPcmStream, stopSpeak } = await import('./keys.js');
-  stopSpeak();
+  const { claimSpeak, playPcmStream } = await import('./keys.js');
+  const { ensureStopKey } = await import('./keys_hypr.js');
+  await ensureStopKey().catch(() => {});
+  // Claim first: a newer reply or Escape while koko is still generating drops
+  // this one; playing kills whatever is already talking.
+  const token = claimSpeak();
   const result = await speakStream({ text });
   if (result.error) {
     process.stderr.write(`${result.error}\n`);
     return 1;
   }
-  const played = playPcmStream(result.body);
+  const played = playPcmStream(result.body, { token });
+  if (played.cancelled) return 0;
   if (played.error) {
     process.stderr.write(`${played.error}\n`);
     return 1;
