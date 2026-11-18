@@ -180,10 +180,10 @@ export async function readSelection({ execFileFn = execFileAsync } = {}) {
   return resolveSpeakText(await grab(true), await grab(false));
 }
 
-function playerCommands(wavPath) {
+function playerCommands(wavPath, volume = loadConfig().volume) {
   return [
-    ['pw-play', wavPath],
-    ['paplay', wavPath],
+    ['pw-play', `--volume=${volume}`, wavPath],
+    ['paplay', `--volume=${Math.round(volume * 65536)}`, wavPath],
     ['afplay', wavPath],
     ['mpv', '--no-terminal', '--really-quiet', '--audio-display=no', wavPath],
     ['ffplay', '-nodisp', '-autoexit', '-loglevel', 'quiet', wavPath],
@@ -224,13 +224,13 @@ export function playWav(wav, { spawnFn = spawn, whichFn = binOnPath, killFn = pr
   return { pid: child.pid, wavPath };
 }
 
-function pcmPlayerCommands({ sampleRate, channels }) {
+function pcmPlayerCommands({ sampleRate, channels }, volume = loadConfig().volume) {
   const rate = String(sampleRate);
   const ch = String(channels);
   return [
     // --raw: without it pw-cat hands stdin to libsndfile, which rejects headerless PCM.
-    ['pw-cat', '--playback', '--raw', '--format', 's16', '--rate', rate, '--channels', ch, '-'],
-    ['pacat', '--format=s16le', `--rate=${rate}`, `--channels=${ch}`],
+    ['pw-cat', '--playback', `--volume=${volume}`, '--raw', '--format', 's16', '--rate', rate, '--channels', ch, '-'],
+    ['pacat', `--volume=${Math.round(volume * 65536)}`, '--format=s16le', `--rate=${rate}`, `--channels=${ch}`],
     ['aplay', '-q', '-t', 'raw', '-f', 'S16_LE', '-r', rate, '-c', ch],
     ['ffplay', '-v', 'error', '-nodisp', '-autoexit', '-f', 's16le', '-ar', rate,
       '-ch_layout', channels === 1 ? 'mono' : 'stereo', '-i', '-'],

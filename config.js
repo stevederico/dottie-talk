@@ -26,13 +26,23 @@ export function parseSpeed(raw) {
   return Math.min(MAX_SPEED, Math.max(MIN_SPEED, Math.round(n * 100) / 100));
 }
 
+export const DEFAULT_VOLUME = 1.5;
+export const MIN_VOLUME = 0.1;
+export const MAX_VOLUME = 4;
+
+export function parseVolume(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_VOLUME;
+  return Math.min(MAX_VOLUME, Math.max(MIN_VOLUME, Math.round(n * 100) / 100));
+}
+
 export function configPath() {
   if (process.env.DOTTIE_TALK_CONFIG) return process.env.DOTTIE_TALK_CONFIG;
   return path.join(os.homedir(), '.config', 'dottie-talk', 'config.json');
 }
 
 export function defaultConfig() {
-  return { keys: { ...DEFAULT_KEYS }, speed: DEFAULT_SPEED };
+  return { keys: { ...DEFAULT_KEYS }, speed: DEFAULT_SPEED, volume: DEFAULT_VOLUME };
 }
 
 function parseKeys(raw) {
@@ -64,13 +74,13 @@ export function loadConfig() {
   }
   const keys = parseKeys(parsed.keys);
   keys.enabled = envKeysOverride(keys.enabled);
-  return { keys, speed: parseSpeed(parsed.speed ?? DEFAULT_SPEED) };
+  return { keys, speed: parseSpeed(parsed.speed ?? DEFAULT_SPEED), volume: parseVolume(parsed.volume ?? DEFAULT_VOLUME) };
 }
 
 export function saveConfig(cfg) {
   const file = configPath();
   mkdirSync(path.dirname(file), { recursive: true });
-  const next = { keys: parseKeys(cfg && cfg.keys), speed: parseSpeed(cfg && cfg.speed) };
+  const next = { keys: parseKeys(cfg && cfg.keys), speed: parseSpeed(cfg && cfg.speed), volume: parseVolume(cfg && cfg.volume) };
   writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`);
   return loadConfig();
 }
@@ -83,12 +93,18 @@ export function setKeysEnabled(enabled) {
   if (!current.keys.dictate) current.keys.dictate = DEFAULT_KEYS.dictate;
   const file = configPath();
   mkdirSync(path.dirname(file), { recursive: true });
-  writeFileSync(file, `${JSON.stringify({ keys: current.keys, speed: current.speed }, null, 2)}\n`);
+  writeFileSync(file, `${JSON.stringify({ keys: current.keys, speed: current.speed, volume: current.volume }, null, 2)}\n`);
   return loadConfig();
 }
 
 export function setSpeed(speed) {
   const current = loadConfig();
   current.speed = parseSpeed(speed);
+  return saveConfig(current);
+}
+
+export function setVolume(volume) {
+  const current = loadConfig();
+  current.volume = parseVolume(volume);
   return saveConfig(current);
 }

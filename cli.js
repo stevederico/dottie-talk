@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { speak, transcribe, transcribeWords, wordsToCues, cuesToSrt, formatForPath } from './core.js';
 import { ensureBinsRunning, binsHealth } from './bin_supervise.js';
 import { PORTS } from './ports.js';
-import { loadConfig, setSpeed, MIN_SPEED, MAX_SPEED } from './config.js';
+import { loadConfig, setSpeed, setVolume, MIN_SPEED, MAX_SPEED, MIN_VOLUME, MAX_VOLUME } from './config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -32,6 +32,7 @@ Usage:
   dottie-talk health
   dottie-talk keys [on|off|status|speak|stop|dictate]
   dottie-talk speed [0.5-2]      show or set speech speed (default 1)
+  dottie-talk volume [0.1-4]     show or set playback volume (default 1.5)
   dottie-talk bar [on|off|status]
   dottie-talk stop
   dottie-talk help
@@ -89,6 +90,7 @@ export function parseArgs(argv) {
     file: cmd === 'transcribe' ? (positionals[0] || '') : '',
     keysAction: cmd === 'keys' ? (positionals[0] || 'status') : '',
     speedArg: cmd === 'speed' ? (positionals[0] || '') : '',
+    volumeArg: cmd === 'volume' ? (positionals[0] || '') : '',
     barAction: cmd === 'bar' ? (positionals[0] || 'status') : '',
     out,
     voice,
@@ -186,6 +188,19 @@ function cmdSpeed(arg) {
   process.stdout.write(`${setSpeed(n).speed}\n`);
 }
 
+function cmdVolume(arg) {
+  if (!arg) {
+    process.stdout.write(`${loadConfig().volume}\n`);
+    return;
+  }
+  const n = Number(arg);
+  if (!Number.isFinite(n) || n < MIN_VOLUME || n > MAX_VOLUME) {
+    process.stderr.write(`usage: volume [${MIN_VOLUME}-${MAX_VOLUME}]\n`);
+    process.exit(1);
+  }
+  process.stdout.write(`${setVolume(n).volume}\n`);
+}
+
 async function cmdKeys(action) {
   const { runKeysCommand } = await import('./keys_hypr.js');
   const result = await runKeysCommand(action);
@@ -252,6 +267,9 @@ async function main() {
       break;
     case 'keys':
       await cmdKeys(opts.keysAction);
+      break;
+    case 'volume':
+      cmdVolume(opts.volumeArg);
       break;
     case 'speed':
       cmdSpeed(opts.speedArg);

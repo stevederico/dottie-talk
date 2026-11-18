@@ -1,3 +1,9 @@
+0.33.0
+
+  Add playback volume
+  Add dottie-talk volume
+  Default volume 1.5
+
 0.32.0
 
   Stop speaks talking over each other
